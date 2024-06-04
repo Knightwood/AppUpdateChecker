@@ -11,7 +11,7 @@ publishing {
         // 定义一个名为 Production 的发布
         Production(MavenPublication) {
             groupId = "com.github.knightwood"
-            artifactId = "appUpdate"
+            artifactId = "AppUpdateChecker"
             version = rootProject.ext.publishVersion
             afterEvaluate { artifact(tasks.getByName("bundleReleaseAar")) }
             artifact generateSourcesJar

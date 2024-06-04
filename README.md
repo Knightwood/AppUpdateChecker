@@ -35,18 +35,18 @@
 
 ### 1.添加依赖
 
-####  最新版本： [![](https://jitpack.io/v/Knightwood/AppUpdate2.svg)](https://jitpack.io/#Knightwood/AppUpdate2)
+####  最新版本： [![](https://jitpack.io/v/Knightwood/AppUpdateChecker.svg)](https://jitpack.io/#Knightwood/AppUpdateChecker)
 
 groovy:
 
 ```groovy
-    implementation 'com.github.knightwood:appUpdate2:5.0.0'
+    implementation 'com.github.knightwood:AppUpdateChecker:1.2.0'
 ```
 
 kotlin:
 
 ```kotlin
-    implementation("com.github.knightwood:appUpdate2:5.0.0")
+    implementation("com.github.knightwood:AppUpdateChecker:1.2.0")
 ```
 
 settings.gradle可能需要添加:
@@ -63,7 +63,7 @@ dependencyResolutionManagement {
 
 ### 2.创建`DownloadManager`，显示更新界面。
 
-### 更多用法请查看[这里示例代码](https://github.com/Knightwood/AppUpdate/blob/main/app/src/main/java/com/azhon/app/MainActivity.kt)
+### 更多用法请查看[这里示例代码](https://github.com/Knightwood/AppUpdateChecker/blob/main/app/src/main/java/com/azhon/app/MainActivity.kt)
 
 步骤：
 
