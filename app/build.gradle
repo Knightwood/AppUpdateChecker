@@ -1,0 +1,64 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace "com.azhon.app"
+    signingConfigs {
+        config {
+            keyAlias 'appUpdate'
+            keyPassword '123456'
+            storeFile file('./../app.jks')
+            storePassword '123456'
+        }
+    }
+    compileSdk rootProject.ext.compileSdk
+
+    defaultConfig {
+        applicationId "com.azhon.app"
+        minSdk rootProject.ext.minSdk
+        targetSdk rootProject.ext.targetSdk
+        versionCode 1
+        versionName "1.0"
+
+    }
+    flavorDimensions "versionCode"
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.config
+        }
+        debug {
+            signingConfig signingConfigs.config
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    productFlavors {
+        other {}
+//        googlePlay {}
+    }
+    buildFeatures {
+        buildConfig true
+    }
+}
+
+dependencies {
+    otherImplementation project(':appupdate')
+//    googlePlayImplementation project(':appupdate-no-op')
+
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.1"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.1"
+    implementation 'androidx.core:core-ktx:1.7.0'
+    implementation 'androidx.appcompat:appcompat:1.4.2'
+    implementation 'com.google.android.material:material:1.5.0'
+}

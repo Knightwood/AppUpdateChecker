@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Win8ButtonStyle" parent="Widget.Material3.Button">
+        <item name="android:textColor">@android:color/white</item>
+        <item name="backgroundTint">@color/win8_button_background</item>
+        <item name="strokeColor">@android:color/white</item>
+        <item name="cornerRadius">0dp</item>
+        <item name="strokeWidth">2dp</item>
+    </style>
+</resources>
