@@ -43,9 +43,13 @@
 #### 最新版本： [![](https://jitpack.io/v/Knightwood/AppUpdateChecker.svg)](https://jitpack.io/#Knightwood/AppUpdateChecker)
 
 ```kotlin
-implementation("com.github.knightwood:appupdatechecker-core:1.3.0") //必选，当然，你也可以抛开下面的界面实现，完全自己实现界面。没有界面亦一样使用
-implementation("com.github.knightwood:appupdatechecker-compose-ui:1.3.0") //compose版本的下载界面，可选
-implementation("com.github.knightwood:appupdatechecker-view-ui:1.3.0") //view体系下的下载界面，可选
+1.2.0
+implementation("com.github.knightwood:AppUpdateChecker:1.2.0")
+
+下一个版本开始：
+implementation("com.github.knightwood:appupdatechecker-core:last_version") //必选，当然，你也可以抛开下面的界面实现，完全自己实现界面。没有界面亦一样使用
+implementation("com.github.knightwood:appupdatechecker-compose-ui:last_version") //compose版本的下载界面，可选
+implementation("com.github.knightwood:appupdatechecker-view-ui:last_version") //view体系下的下载界面，可选
 ```
 
 settings.gradle可能需要添加:
