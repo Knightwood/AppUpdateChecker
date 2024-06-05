@@ -10,8 +10,8 @@ import android.view.WindowManager
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentTransaction
 import com.azhon.app.R
-import com.azhon.appupdate.R as R1
-import com.azhon.appupdate.view.BaseUpdateDialogFragment
+import com.kiylx.tools.view_ui.R as R1
+import com.kiylx.tools.view_ui.BaseUpdateDialogFragment
 
 /**
  * @author KnightWood

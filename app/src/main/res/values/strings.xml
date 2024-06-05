@@ -9,4 +9,5 @@
     <string name="layout_simple_use">简单使用</string>
     <string name="layout_library_dialog">使用版本库内置的对话框更新</string>
     <string name="layout_cancel">取消下载</string>
+    <string name="title_activity_compose_example">ComposeExampleActivity</string>
 </resources>

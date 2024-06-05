@@ -3,12 +3,18 @@
   <img src="https://img.shields.io/badge/license-Apache2.0-orange.svg">
 </p>
 
+
+## compose版本效果图
+
+<img src="img/zh/compose_1.png" width="300"><img src="img/zh/compose_2.png" width="300">
+
 ## 效果图
 
 <img src="img/zh/zh_1.png" width="300"><img src="img/zh/zh_2.png" width="300">
 <img src="img/zh/zh_3.png" width="300"><img src="img/zh/zh_4.png" width="300">
 <img src="img/zh/zh_5.png" width="300"><img src="img/zh/zh_6.png" width="300">
 <img src="img/zh/zh_7.png" width="300">
+
 
 ## demo中的自定义下载弹窗示例
 
@@ -17,6 +23,7 @@
 ### 功能介绍
 
 * [x] 支持Kotlin
+* [x] 支持compose
 * [x] 界面定制变得极为简单
 * [x] 支持后台下载
 * [x] 支持强制更新
@@ -31,22 +38,14 @@
 
 ## 使用步骤
 
-
-
 ### 1.添加依赖
 
-####  最新版本： [![](https://jitpack.io/v/Knightwood/AppUpdateChecker.svg)](https://jitpack.io/#Knightwood/AppUpdateChecker)
-
-groovy:
-
-```groovy
-    implementation 'com.github.knightwood:AppUpdateChecker:1.2.0'
-```
-
-kotlin:
+#### 最新版本： [![](https://jitpack.io/v/Knightwood/AppUpdateChecker.svg)](https://jitpack.io/#Knightwood/AppUpdateChecker)
 
 ```kotlin
-    implementation("com.github.knightwood:AppUpdateChecker:1.2.0")
+implementation("com.github.knightwood:appupdatechecker-core:1.3.0") //必选，当然，你也可以抛开下面的界面实现，完全自己实现界面。没有界面亦一样使用
+implementation("com.github.knightwood:appupdatechecker-compose-ui:1.3.0") //compose版本的下载界面，可选
+implementation("com.github.knightwood:appupdatechecker-view-ui:1.3.0") //view体系下的下载界面，可选
 ```
 
 settings.gradle可能需要添加:
@@ -63,7 +62,9 @@ dependencyResolutionManagement {
 
 ### 2.创建`DownloadManager`，显示更新界面。
 
-### 更多用法请查看[这里示例代码](https://github.com/Knightwood/AppUpdateChecker/blob/main/app/src/main/java/com/azhon/app/MainActivity.kt)
+*
+
+更多用法请查看[这里示例代码](https://github.com/Knightwood/AppUpdateChecker/blob/main/app/src/main/java/com/azhon/app/MainActivity.kt)
 
 步骤：
 
@@ -75,8 +76,6 @@ dependencyResolutionManagement {
 ```kotlin
 //配置一个DownloadManager
 val manager = DownloadManager.config(application) {
-    //这里指定使用内置的不同更新界面，如果需要自己定制界面，指定为UpdateDialogType.None      
-    updateDialogType = UpdateDialogType.Colorful
     apkUrl = url
     apkName = this@MainActivity.apkName
     apkVersionCode = 2
@@ -87,7 +86,7 @@ val manager = DownloadManager.config(application) {
 }
 
 //显示更新弹窗界面
-val manager = downloadApp(manager!!)
+showDownloadDialog(manager, updateDialogType = viewStyle)
 
 ```
 
@@ -112,8 +111,6 @@ class UpdateDialogType {
 }
 ```
 
-
-
 ### 配置下载信息得到DownloadManager详细用法
 
 #### 使用DownloadManager.DownloadConfig配置DownloadManager
@@ -134,27 +131,16 @@ class UpdateDialogType {
 - AppUpgradeHolder
   用于根据manager显示更新界面，一些快捷方法，如果你自定义界面，就用不到他
 
-| 函数                                                                     | 描述                   |
-|------------------------------------------------------------------------|----------------------|
-| Activity.downloadApp(downloadManager: DownloadManager)                 | 配置并显示内置下载界面          |
-| Activity.downloadApp(config: DownloadManager.DownloadConfig)           | 配置并显示内置下载界面          |
-| Activity.downloadApp(block: DownloadManager.DownloadConfig.() -> Unit) | 配置并显示内置下载界面          |
-| DownloadManager.download(activity: Activity)                           | 使用Builder配置并显示内置下载界面 |
-| DownloadManager.download()                                             | 使用Builder配置并显示内置下载界面 |
-| showUi(downloadManager: DownloadManager, activity: Activity)           | 仅显示内置下载界面            |
+| 函数                                                                                                                       | 描述                   |
+|--------------------------------------------------------------------------------------------------------------------------|----------------------|
+| FragmentActivity.showDownloadDialog( downloadManager: DownloadManager,updateDialogType: Int = UpdateDialogType.Colorful) | 配置并显示内置下载界面          |
+| FragmentActivity.showDownloadDialog(updateDialogType: Int,block: DownloadManager.DownloadConfig.() -> Unit)              | 配置并显示内置下载界面          |
+| DownloadManager.showDownloadDialog(updateDialogType: Int,activity: FragmentActivity)                                     | 使用Builder配置并显示内置下载界面 |
+| DownloadManager.showDownloadDialog()                                                                                     | 使用Builder配置并显示内置下载界面 |
+| showUi(downloadManager: DownloadManager,updateDialogType: Int, activity: FragmentActivity)                               | 仅显示内置下载界面            |
 
 对于`showUi`方法：在使用内置界面时，你开始下载应用，并关闭了下载弹窗。
 当你调用showUi时，弹窗会继续显示下载进度，而不会重新开始下载。
-
-* 也可以直接配置并显示更新界面
-
-```
-直接通过downloadApp方法构造downloadmanager并显示更新界面
-val manager=downloadApp {
-            //。。。。。
-     		//跟上面一样的配置
-        }
-```
 
 #### 使用Builder配置DownloadManager
 
@@ -169,16 +155,18 @@ val downloadManager = DownloadManager.Builder(this).run {
     updateDialogType(UpdateDialogType.SimpleDialog)//修改样式
     build()
 }
-downloadManager.download(activity)//如果不传activity参数，updateDialogType则不起作用
+downloadManager.showDownloadDialog(activity)//如果不传activity参数，updateDialogType则不起作用
 
 ```
 
 ### 自定义界面
 
 ##### 自定义界面
+
 - 需要做的事情极其简单，你不需要关注下载的流程，监听之类的，只需要继承并重写布局，然后显示这个自定义的DialogFragment
 
 * 步骤：
+
 1. 写一个类继承`BaseUpdateDialogFragment`，重写布局
 2. 跟往常一样通过`DownloadManager.config(application)`生成一个[DownloadManager]
 3. 显示你的自定义的DialogFragment
@@ -187,13 +175,14 @@ downloadManager.download(activity)//如果不传activity参数，updateDialogTyp
 
 `initProgressBar`和`setProgress`方法。
 比如：
+
 ```kotlin
 /**
  * 设置进度条进度
  * @param progressValue Int
  */
 override fun setProgress(progressValue: Int) {
-  (progressBar() as NumberProgressBar).progress = progressValue
+    (progressBar() as NumberProgressBar).progress = progressValue
 }
 
 /**
@@ -201,12 +190,63 @@ override fun setProgress(progressValue: Int) {
  *
  */
 override fun initProgressBar() {
-  (progressBar() as NumberProgressBar).max = 100
+    (progressBar() as NumberProgressBar).max = 100
 }
 
 ```
 
-自定义界面示例：
+### 2.1 compsoe版本使用方式
+
+同样内置了两种弹窗
+
+* alertdialog样式
+
+```kotlin
+
+var openDialog by remember { mutableStateOf(false) }
+
+if (openDialog) {
+    AlertUpdateDialog(
+        context = this,
+        downloadManager = manager
+    ) {
+        openDialog = false
+    }
+}
+
+Button(onClick = {
+    openDialog = true
+}) {
+    Text(text = "alertDialog类型")
+}
+```
+
+* 老样式
+
+```kotlin
+
+var openDialog2 by remember { mutableStateOf(false) }
+
+if (openDialog2) {
+    ColorfulUpdateDialog(
+        context = this,
+        downloadManager = manager,
+        confirmButton = { modifier, text, enabled, onClick ->
+            ConfirmButton(modifier, text, enabled, onClick)
+        }
+    ) {
+        openDialog2 = false
+    }
+}
+
+Button(onClick = {
+    openDialog2 = true
+}) {
+    Text(text = "多彩的更新弹窗")
+}
+```
+
+### view 自定义界面示例：
 
 1. 继承BaseUpdateDialogFragment
 
@@ -282,6 +322,55 @@ DownloadManager的一些其他配置项
     onButtonClickListener = {} //监听界面的按钮事件（BaseUpdateDialogFragment）
 }
 manager.checkThenDownload()//立即开始下载
+
+```
+### compose 自定义
+使用封装好的compose函数 `BasicUpdateDialog`
+```kotlin
+BasicUpdateDialog(
+        modifier = modifier,
+        context = context,
+        downloadManager = downloadManager,
+        dismiss = dismiss,
+        content = { modifier1: Modifier,
+                    config: DownloadManager.DownloadConfig,
+                    dismiss1: () -> Unit,
+                    downloadState: State<DownloadStatus>,
+                    progressValue: Float,
+                    buttonState: ButtonState,
+                    context1: Context,
+                    downloadManager1: DownloadManager ->
+            //这里是实际的显示内容，自己定义函数即可
+            SampleUpdateDialog(
+                modifier = modifier1,
+                config = config,
+                dismiss = dismiss1,
+                downloadState = downloadState,
+                progressValue = progressValue,
+                buttonState = buttonState,
+                context = context1,
+                downloadManager = downloadManager1,
+                confirmButton = confirmButton,
+            )
+
+        }
+    )
+
+//实际显示内容
+@Composable
+private fun SampleUpdateDialog(
+  modifier: Modifier,
+  config: DownloadManager.DownloadConfig,
+  dismiss: () -> Unit,
+  downloadState: State<DownloadStatus>,
+  progressValue: Float,
+  buttonState: ButtonState,
+  context: Context,
+  downloadManager: DownloadManager,
+  confirmButton: @Composable (modifier: Modifier, text: String, enabled: Boolean, onClick: () -> Unit) -> Unit,
+) {
+    
+}
 
 ```
 

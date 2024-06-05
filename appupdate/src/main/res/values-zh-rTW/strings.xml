@@ -1,5 +1,4 @@
 <resources>
-    <string name="app_update_latest_version">當前已是最新版本!</string>
     <string name="app_update_start_download">開始下載</string>
     <string name="app_update_start_download_hint">可稍後查看下載進度</string>
     <string name="app_update_start_downloading">正在下載新版本</string>
@@ -8,17 +7,4 @@
     <string name="app_update_download_error">下載出錯</string>
     <string name="app_update_continue_downloading">點擊繼續下載</string>
     <string name="app_update_background_downloading">正在後臺下載新版本…</string>
-    <string name="app_update_dialog_new">發現新版本%s可以下載啦！</string>
-    <string name="app_update_dialog_new_size">新版本大小：%s</string>
-    <string name="app_update_update">升級</string>
-    <string name="app_update_close">關閉</string>
-    <string name="update_description_title">更新描述：</string>
-    <string name="has_cancel_download">已取消下載</string>
-    <string name="update_title">有更新可用</string>
-    <string name="update_title_downloading">正在下載安裝應用更新</string>
-    <string name="update_title_2">下載及安裝更新</string>
-    <string name="update_size_tv">更新大小：%s</string>
-    <string name="update">更新</string>
-    <string name="cancel">取消</string>
-    <string name="install">安裝</string>
 </resources>

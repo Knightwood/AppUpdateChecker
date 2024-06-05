@@ -9,7 +9,7 @@
         <service android:name=".service.DownloadService" />
 
         <provider
-            android:name="com.azhon.appupdate.config.AppUpdateFileProvider"
+            android:name="com.f_libs.appupdate.config.AppUpdateFileProvider"
             android:authorities="${applicationId}.fileProvider"
             android:exported="false"
             android:grantUriPermissions="true">
@@ -17,8 +17,6 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/app_update_file" />
         </provider>
-        <activity
-            android:name=".view.UpdateDialogActivity"
-            android:theme="@style/AppUpdate.UpdateDialog" />
+
     </application>
 </manifest>

@@ -40,13 +40,6 @@
         </RadioGroup>
 
 
-        <TextView
-            android:id="@+id/tv_channel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="40dp"
-            android:textColor="#333333" />
-
         <Button
             android:id="@+id/btn_3"
             android:layout_width="wrap_content"
@@ -166,6 +159,15 @@
             android:layout_gravity="center"
             android:layout_marginHorizontal="16dp"
             android:text="删除下载的apk"
+            android:textAllCaps="false" />
+
+        <Button
+            android:id="@+id/btn_6"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginHorizontal="16dp"
+            android:text="compose版本ui"
             android:textAllCaps="false" />
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

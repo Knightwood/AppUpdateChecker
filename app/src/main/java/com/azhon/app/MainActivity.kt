@@ -1,5 +1,6 @@
 package com.azhon.app
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
@@ -8,18 +9,17 @@ import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.RadioGroup
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.azhon.app.compose.ComposeExampleActivity
 import com.azhon.app.example.PixelUpdateDialogFragment
 import com.azhon.app.example.Win8UpdateDialogFragment
-import com.azhon.appupdate.listener.OnButtonClickListener
-import com.azhon.appupdate.listener.OnDownloadListenerAdapter
-import com.azhon.appupdate.manager.DownloadManager
-import com.azhon.appupdate.manager.UpdateDialogType
-import com.azhon.appupdate.manager.download
-import com.azhon.appupdate.manager.downloadApp
-import com.azhon.appupdate.util.ApkUtil
-import com.azhon.appupdate.util.ToastUtils
+import com.f_libs.appupdate.listener.OnButtonClickListener
+import com.f_libs.appupdate.listener.OnDownloadListenerAdapter
+import com.f_libs.appupdate.manager.DownloadManager
+import com.f_libs.appupdate.util.ApkUtil
+import com.f_libs.appupdate.util.ToastUtils
+import com.kiylx.tools.view_ui.UpdateDialogType
+import com.kiylx.tools.view_ui.showDownloadDialog
 
 class CustomType {
     companion object {
@@ -51,7 +51,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
     private var manager: DownloadManager? = null
     private lateinit var tvPercent: TextView
     private lateinit var progressBar: ProgressBar
-    private var viewStyle = UpdateDialogType.Colorful
+    private var viewStyle = com.kiylx.tools.view_ui.UpdateDialogType.Colorful
     private var customType = CustomType.Pixel
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,22 +60,21 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
         title = getString(R.string.app_title)
         progressBar = findViewById(R.id.number_progress_bar)
         tvPercent = findViewById<Button>(R.id.tv_percent)
-        findViewById<TextView>(R.id.tv_channel).text =
-            String.format(getString(R.string.layout_channel), BuildConfig.FLAVOR)
         findViewById<Button>(R.id.btn_1).setOnClickListener(this)
         findViewById<Button>(R.id.btn_2).setOnClickListener(this)
         findViewById<Button>(R.id.btn_3).setOnClickListener(this)
         findViewById<Button>(R.id.btn_4).setOnClickListener(this)
         findViewById<Button>(R.id.btn_5).setOnClickListener(this)
+        findViewById<Button>(R.id.btn_6).setOnClickListener(this)
 
         findViewById<RadioGroup>(R.id.radio_group).setOnCheckedChangeListener { group, checkedId ->
             when (checkedId) {
                 R.id.colorful -> {
-                    viewStyle = UpdateDialogType.Colorful
+                    viewStyle = com.kiylx.tools.view_ui.UpdateDialogType.Colorful
                 }
 
                 R.id.simpledialog -> {
-                    viewStyle = UpdateDialogType.SimpleDialog
+                    viewStyle = com.kiylx.tools.view_ui.UpdateDialogType.SimpleDialog
                 }
             }
         }
@@ -83,12 +82,12 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
         findViewById<RadioGroup>(R.id.radio_group2).setOnCheckedChangeListener { group, checkedId ->
             when (checkedId) {
                 R.id.pixel -> {
-                    viewStyle = UpdateDialogType.None
+                    viewStyle = com.kiylx.tools.view_ui.UpdateDialogType.None
                     customType = CustomType.Pixel
                 }
 
                 R.id.win -> {
-                    viewStyle = UpdateDialogType.None
+                    viewStyle = com.kiylx.tools.view_ui.UpdateDialogType.None
                     customType = CustomType.Win8
                 }
             }
@@ -120,6 +119,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
                 ApkUtil.deleteDefaultCacheDir(application)
                 ToastUtils.showShot(this.applicationContext, "已删除")
             }
+
+            R.id.btn_6 -> {
+                startActivity(Intent(this, ComposeExampleActivity::class.java))
+            }
         }
     }
 
@@ -131,7 +134,6 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
      */
     private fun startUpdate1() {
         manager = DownloadManager.config(application) {
-            updateDialogType = UpdateDialogType.None
             apkUrl = url
             apkName = this@MainActivity.apkName
             apkVersionCode = 2
@@ -158,8 +160,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
      */
     private fun startUpdate2() {
         resetPb()
-        val manager = downloadApp {
-            updateDialogType = UpdateDialogType.None
+        val manager = DownloadManager.config(application){
             apkUrl = url
             apkName = this@MainActivity.apkName
 //            smallIcon = R.mipmap.ic_launcher
@@ -191,9 +192,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
 //            .smallIcon(R.mipmap.ic_launcher)
             .dialogButtonColor(Color.RED)
             .apkDescription(getString(R.string.dialog_msg))
-//            .viewType(ViewType.SimpleDialog)//修改样式
             .build()
-        downloadManager.download(this)//如果不增加此参数，viewType则不起作用
+        downloadManager.showDownloadDialog(this, updateDialogType = UpdateDialogType.None)
     }
 
     /**
@@ -202,7 +202,6 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
      */
     private fun startUpdate3() {
         manager = DownloadManager.config(application) {
-            updateDialogType = viewStyle
             apkUrl = url
             apkName = this@MainActivity.apkName
 //            smallIcon = R.mipmap.ic_launcher
@@ -215,11 +214,11 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
             enableLog(true)
 //            httpManager()
             jumpInstallPage = false
+            showNewerToast = true
             configDialog {
 //              dialogImage=R.drawable.ic_dialog
 //              dialogButtonColor=Color.parseColor("#E743DA")
 //              dialogProgressBarColor=Color.parseColor("#E743DA")
-                showNewerToast = true
                 dialogButtonTextColor = Color.WHITE
             }
             showNotification = true
@@ -228,7 +227,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
             registerDownloadListener(listenerAdapter)
             onButtonClickListener = this@MainActivity
         }
-        downloadApp(manager!!)
+        showDownloadDialog(manager!!, updateDialogType = viewStyle)
     }
 
     private fun resetPb() {
