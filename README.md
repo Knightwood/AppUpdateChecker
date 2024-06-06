@@ -47,9 +47,9 @@
 implementation("com.github.knightwood:AppUpdateChecker:1.2.0")
 
 1.2.0之后版本开始：
-implementation("com.github.knightwood:appupdatechecker-core:last_version") //必选，当然，你也可以抛开下面的界面实现，完全自己实现界面。没有界面亦一样使用
-implementation("com.github.knightwood:appupdatechecker-compose-ui:last_version") //compose版本的下载界面，可选
-implementation("com.github.knightwood:appupdatechecker-view-ui:last_version") //view体系下的下载界面，可选
+implementation("com.github.Knightwood.AppUpdateChecker:appupdatechecker-core:last_version") //必选，当然，你也可以抛开下面的界面实现，完全自己实现界面。没有界面亦一样使用
+implementation("com.github.Knightwood.AppUpdateChecker:appupdatechecker-compose-ui:last_version") //compose版本的下载界面，可选
+implementation("com.github.Knightwood.AppUpdateChecker:appupdatechecker-view-ui:last_version") //view体系下的下载界面，可选
 ```
 
 settings.gradle可能需要添加:
