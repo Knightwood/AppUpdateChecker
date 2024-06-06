@@ -60,6 +60,22 @@ afterEvaluate {
                 afterEvaluate {
                     from(components["release"])
                 }
+                pom {
+                    name.set("AppUpdateChecker-Core")
+                    description.set("AppUpdateChecker is a library that helps you to check for updates of your app.")
+                    url.set("https://github.com/knightwood/AppUpdateChecker")
+                    licenses {
+                        license {
+                            name.set("The Apache License, Version 2.0")
+                            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+                    developers {
+                        developer {
+                            name.set("KnightWood")
+                        }
+                    }
+                }
             }
         }
     }

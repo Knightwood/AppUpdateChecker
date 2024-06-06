@@ -1,12 +1,6 @@
 package com.kiylx.tools.compose_ui
 
 import android.content.Context
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -16,21 +10,9 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import com.f_libs.appupdate.base.bean.DownloadStatus
-import com.f_libs.appupdate.config.Constant
-import com.f_libs.appupdate.listener.OnDownloadListener
 import com.f_libs.appupdate.manager.DownloadManager
-import com.f_libs.appupdate.util.ApkUtil
-import com.kiylx.tools.compose_ui.component.ConfirmButton
-import com.kiylx.tools.compose_ui.component.DismissButton
-import com.kiylx.tools.compose_ui.component.SealDialog
-import com.kiylx.tools.compose_ui.icons.SystemUpdate
-import java.io.File
 
 @Composable
 fun BasicUpdateDialog(
@@ -39,20 +21,17 @@ fun BasicUpdateDialog(
     downloadManager: DownloadManager,
     dismiss: () -> Unit,
     content: @Composable (
-        modifier: Modifier,
         config: DownloadManager.DownloadConfig,
-        dismiss: () -> Unit,
         downloadState: State<DownloadStatus>,
+        downloading: () -> Boolean,
+        startDownload: () -> Unit,
+        cancelDownload: () -> Unit,
         progressValue: Float,
         buttonState: ButtonState,
-        context: Context,
-        downloadManager: DownloadManager
     ) -> Unit
 ) {
 
-    val config = remember(downloadManager) {
-        downloadManager.config
-    }
+
     val downloadState = downloadManager.downloadStateFlow.collectAsState()
 
     var progressValue by remember {
@@ -64,53 +43,60 @@ fun BasicUpdateDialog(
     }
 
     LaunchedEffect(key1 = Unit, block = {
-        config.registerDownloadListener(object : OnDownloadListener {
-            override fun start() {
-                buttonState = ButtonState(
-                    enable = false,
-                    stringId = R.string.app_downloading
-                )
-            }
-
-            override fun downloading(max: Int, progress: Int) {
-                progressValue = progress.toFloat()
-            }
-
-            override fun done(apk: File) {
-                if (config.jumpInstallPage) {
+        downloadManager.downloadStateFlow.collect {
+            when (it) {
+                DownloadStatus.Cancel -> {
+                    buttonState = ButtonState(
+                        enable = false,
+                        stringId = R.string.canceled
+                    )
                     dismiss()
-                } else {
-                    buttonState = ButtonState(enable = true, stringId = R.string.install)
+                }
+
+                is DownloadStatus.Done -> {
+                    if (downloadManager.config.jumpInstallPage) {
+                        dismiss()
+                    } else {
+                        buttonState = ButtonState(enable = true, stringId = R.string.install)
+                    }
+                }
+
+                is DownloadStatus.Downloading -> {
+                    progressValue = it.progress.toFloat()
+                }
+
+                is DownloadStatus.Error -> {
+                    buttonState = ButtonState(
+                        enable = false,
+                        stringId = com.f_libs.appupdate.R.string.app_update_download_error
+                    )
+                    dismiss()
+                }
+
+                DownloadStatus.IDLE -> {
+                    buttonState = ButtonState(
+                        enable = downloadManager.canDownload(),
+                        stringId = R.string.update
+                    )
+                }
+
+                DownloadStatus.Start -> {
+                    buttonState = ButtonState(
+                        enable = false,
+                        stringId = R.string.app_downloading
+                    )
                 }
             }
-
-            override fun cancel() {
-                dismiss()
-                buttonState = ButtonState(
-                    enable = false,
-                    stringId = R.string.canceled
-                )
-            }
-
-            override fun error(e: Throwable) {
-                buttonState = ButtonState(
-                    enable = false,
-                    stringId = com.f_libs.appupdate.R.string.app_update_download_error
-                )
-                dismiss()
-            }
-
-        })
+        }
     })
     content(
-        modifier,
-        config,
-        dismiss,
+        downloadManager.config,
         downloadState,
+        { downloadManager.downloading },
+        downloadManager::directDownload,
+        downloadManager::cancelDirectly,
         progressValue,
         buttonState,
-        context,
-        downloadManager
     )
 }
 

@@ -74,7 +74,7 @@
         app:constraint_referenced_ids="app_update_ib_close,app_update_btn_update" />
 
     <com.google.android.material.button.MaterialButton
-        android:id="@id/app_update_ib_close"
+        android:id="@+id/app_update_ib_close"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/cancel"
@@ -87,7 +87,7 @@
         />
 
     <com.google.android.material.button.MaterialButton
-        android:id="@id/app_update_btn_update"
+        android:id="@+id/app_update_btn_update"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/update"

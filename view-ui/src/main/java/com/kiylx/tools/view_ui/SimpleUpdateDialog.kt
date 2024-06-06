@@ -91,7 +91,7 @@ class SimpleUpdateDialog {
             }
             dialogBuilder.show().apply {
                 getButton(AlertDialog.BUTTON_POSITIVE).also { positiveButton ->
-                    if (manager.downloadState) {
+                    if (manager.downloading) {
                         showProgressUi(positiveButton)
                     }
                     mOnDownloadListener = object : OnDownloadListener {

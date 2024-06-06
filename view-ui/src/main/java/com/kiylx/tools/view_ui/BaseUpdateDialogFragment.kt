@@ -62,7 +62,7 @@ open class BaseUpdateDialogFragment : DialogFragment(), OnDownloadListener {
         observeLivedata()
         vm.stateLivedata.value = Action.ready
         //如果正在下载，更新一下界面状态
-        if (manager.downloadState) {
+        if (manager.downloading) {
             start()
         }
     }

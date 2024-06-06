@@ -145,9 +145,9 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
             showNotification = true
             showBgdToast = false
             forcedUpgrade = false
-            registerDownloadListener(listenerAdapter)
             onButtonClickListener = this@MainActivity
         }
+        manager!!.registerDownloadListener(listenerAdapter)
         if (customType == CustomType.Pixel) {
             PixelUpdateDialogFragment.open(this)
         } else {
@@ -160,7 +160,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
      */
     private fun startUpdate2() {
         resetPb()
-        val manager = DownloadManager.config(application){
+        val manager = DownloadManager.config(application) {
             apkUrl = url
             apkName = this@MainActivity.apkName
 //            smallIcon = R.mipmap.ic_launcher
@@ -173,8 +173,9 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
             forcedUpgrade = false
             enableLog(true)
             jumpInstallPage = true
-            registerDownloadListener(listenerAdapter)//监听下载进度
+
         }
+        manager.registerDownloadListener(listenerAdapter)//监听下载进度
         manager.checkThenDownload()//立即开始下载
     }
 
@@ -224,9 +225,9 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
             showNotification = true
             showBgdToast = false
             forcedUpgrade = false
-            registerDownloadListener(listenerAdapter)
             onButtonClickListener = this@MainActivity
         }
+        manager!!.registerDownloadListener(listenerAdapter)
         showDownloadDialog(manager!!, updateDialogType = viewStyle)
     }
 

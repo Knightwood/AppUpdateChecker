@@ -25,23 +25,38 @@ import kotlinx.coroutines.flow.map
 class DownloadManager private constructor(
     var config: DownloadConfig,
     val application: Application
-){
+) {
+    /**
+     * 是否正在下载
+     */
+    var downloading: Boolean = false
 
-    var downloadState: Boolean = false
-
+    /**
+     * 下载状态流
+     */
     var downloadStateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow(DownloadStatus.IDLE)
+
+    /**
+     * 百分比进度
+     */
+    val progressFlow: MutableStateFlow<Float> = MutableStateFlow(0f)
 
     init {
         downloadStateFlow.map {
-            downloadState = when (it) {
+            downloading = when (it) {
                 is DownloadStatus.Cancel,
                 is DownloadStatus.Done,
                 is DownloadStatus.Error,
                 is DownloadStatus.IDLE -> {
+                    progressFlow.tryEmit(0f)
                     false
                 }
 
-                is DownloadStatus.Downloading,
+                is DownloadStatus.Downloading -> {
+                    progressFlow.tryEmit(((it.progress / it.max.toDouble() * 100.0).toFloat()))
+                    true
+                }
+
                 is DownloadStatus.Start -> {
                     true
                 }
@@ -90,9 +105,9 @@ class DownloadManager private constructor(
         if (config.apkName.isEmpty()) {
             LogUtil.e(TAG, "apkName can not be empty!")
             return false
-        }else{
-            if (!config.apkName.endsWith(Constant.APK_SUFFIX)){
-                config.apkName+=".apk"
+        } else {
+            if (!config.apkName.endsWith(Constant.APK_SUFFIX)) {
+                config.apkName += ".apk"
             }
         }
         if (config.apkDescription.isEmpty()) {
@@ -104,11 +119,20 @@ class DownloadManager private constructor(
     }
 
     /**
-     * when download not start,HttpManager maybe is null
-     * in this case, will exec "then" block
+     * 取消下载，如果httpManager不存在，则直接执行then
+     *
+     * @param then
      */
     fun cancel(then: () -> Unit = {}) {
         config.httpManager?.cancel() ?: then()
+    }
+
+    /**
+     * 取消下载
+     *
+     */
+    fun cancelDirectly() {
+        config.httpManager?.cancel()
     }
 
     /**
@@ -123,6 +147,14 @@ class DownloadManager private constructor(
     internal fun reConfig(config: DownloadConfig) {
         this.config.httpManager?.release()
         this.config = config
+    }
+
+    fun registerButtonListener(onButtonClickListener: OnButtonClickListener) {
+        config.onButtonClickListener = onButtonClickListener
+    }
+
+    fun registerDownloadListener(onDownloadListener: OnDownloadListener) {
+        config.onDownloadListeners.add(onDownloadListener)
     }
 
     fun clearListener() {
@@ -143,7 +175,7 @@ class DownloadManager private constructor(
         }
 
         fun isDownloading(): Boolean {
-            return instance?.downloadState ?: false
+            return instance?.downloading ?: false
         }
 
         fun existInstance(): DownloadManager? = instance
@@ -316,7 +348,7 @@ class DownloadManager private constructor(
         /**
          * 配置视图
          */
-        @Deprecated("未来将会移除")
+        @Deprecated("未来将会移除，配置的是ColorfulOld类型的弹窗")
         fun configDialog(block: DialogConfig.() -> Unit): DownloadConfig {
             viewConfig.block()
             return this

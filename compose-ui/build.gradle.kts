@@ -68,6 +68,22 @@ afterEvaluate {
                 afterEvaluate {
                     from(components["release"])
                 }
+                pom {
+                    name.set("AppUpdateChecker-Compose-UI")
+                    description.set("A library for checking app updates with a beautiful UI.")
+                    url.set("https://github.com/knightwood/AppUpdateChecker")
+                    licenses {
+                        license {
+                            name.set("The Apache License, Version 2.0")
+                            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+                    developers {
+                        developer {
+                            name.set("KnightWood")
+                        }
+                    }
+                }
             }
         }
     }

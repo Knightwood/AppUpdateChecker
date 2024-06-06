@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.withContext
@@ -95,7 +96,7 @@ class DownloadService : Service(), OnDownloadListener {
 
     @Synchronized
     private fun download() {
-        if (manager.downloadState) {
+        if (manager.downloading) {
             LogUtil.e(TAG, "Currently downloading, please download again!")
             return
         }
@@ -176,6 +177,10 @@ class DownloadService : Service(), OnDownloadListener {
             NotificationUtil.cancelNotification(this@DownloadService)
         }
         manager.config.onDownloadListeners.forEach { it.cancel() }
+        scope.launch {
+            delay(300)
+            manager.downloadStateFlow.emit(DownloadStatus.IDLE)
+        }
     }
 
     override fun error(e: Throwable) {

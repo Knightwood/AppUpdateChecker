@@ -1,7 +1,12 @@
 package com.kiylx.tools.compose_ui
 
 import android.content.Context
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -36,23 +41,26 @@ fun AlertUpdateDialog(
         context = context,
         downloadManager = downloadManager,
         dismiss = dismiss,
-        content = { modifier1: Modifier,
-                    config: DownloadManager.DownloadConfig,
-                    dismiss1: () -> Unit,
-                    downloadState: State<DownloadStatus>,
-                    progressValue: Float,
-                    buttonState: ButtonState,
-                    context1: Context,
-                    downloadManager1: DownloadManager ->
+        content = {
+                config: DownloadManager.DownloadConfig,
+                downloadState: State<DownloadStatus>,
+                downloading: () -> Boolean,
+                startDownload: () -> Unit,
+                cancelDownload: () -> Unit,
+                progressValue: Float,
+                buttonState: ButtonState,
+            ->
             SampleUpdateDialog(
-                modifier = modifier1,
+                modifier = modifier,
                 config = config,
-                dismiss = dismiss1,
+                dismiss = dismiss,
                 downloadState = downloadState,
+                downloading = downloading,
+                startDownload = startDownload,
+                cancelDownload = cancelDownload,
                 progressValue = progressValue,
                 buttonState = buttonState,
-                context = context1,
-                downloadManager = downloadManager1
+                context = context,
             )
 
         }
@@ -65,10 +73,12 @@ private fun SampleUpdateDialog(
     config: DownloadManager.DownloadConfig,
     dismiss: () -> Unit,
     downloadState: State<DownloadStatus>,
+    downloading: () -> Boolean,
+    startDownload: () -> Unit,
+    cancelDownload: () -> Unit,
     progressValue: Float,
     buttonState: ButtonState,
     context: Context,
-    downloadManager: DownloadManager
 ) {
     SealDialog(
         modifier = modifier,
@@ -83,7 +93,7 @@ private fun SampleUpdateDialog(
             if (!config.forcedUpgrade)
                 dismiss()
         },
-        title = { Text(text = "发现新版本${config.apkVersionName}!") },
+        title = { Text(text = "发现新版本${config.apkVersionName} !") },
         content = {
             config.apkSize.takeIf {
                 it.isNotEmpty() && it.isNotBlank()
@@ -104,13 +114,17 @@ private fun SampleUpdateDialog(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .align(Alignment.Start)
             )
-            Text(
-                text = config.apkDescription.replace("\\n", "\n"),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .align(Alignment.Start)
-            )
+            Column(modifier = Modifier.fillMaxWidth()
+                .heightIn(max = 160.dp)
+                .verticalScroll(rememberScrollState())) {
+                Text(
+                    text = config.apkDescription.replace("\\n", "\n"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .align(Alignment.Start)
+                )
+            }
             if (
                 downloadState.value is DownloadStatus.Downloading
                 || downloadState.value is DownloadStatus.Start
@@ -124,6 +138,7 @@ private fun SampleUpdateDialog(
         },
         dismissButton = {
             DismissButton {
+                cancelDownload()
                 dismiss()
             }
         },
@@ -142,8 +157,9 @@ private fun SampleUpdateDialog(
                     }
                 } else {
                     //执行下载
-                    if (!downloadManager.downloadState)
-                        downloadManager.directDownload()
+                    if (!downloading()) {
+                        startDownload()
+                    }
                 }
             }
         })

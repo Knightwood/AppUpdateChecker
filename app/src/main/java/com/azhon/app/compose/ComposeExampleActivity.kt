@@ -33,7 +33,7 @@ class ComposeExampleActivity : ComponentActivity() {
             apkVersionCode = 2
             apkVersionName = "v4.2.1"
             apkSize = "7.7MB"
-            apkDescription = getString(R.string.dialog_msg)
+            apkDescription = getString(R.string.dialog_msg)+getString(R.string.dialog_msg)
             enableLog(true)
             jumpInstallPage = false
             showNotification = true

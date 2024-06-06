@@ -83,7 +83,7 @@ class UpdateDialogActivity : AppCompatActivity(), View.OnClickListener {
         }
         setWindowSize()
         initView(manager)
-        if (manager.downloadState) {
+        if (manager.downloading) {
             manager.config.onDownloadListeners.add(listenerAdapter)
             btnUpdate.isEnabled = false
             btnUpdate.text = resources.getString(com.f_libs.appupdate.R.string.app_update_background_downloading)

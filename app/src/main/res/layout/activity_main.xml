@@ -12,10 +12,10 @@
         android:orientation="vertical">
 
         <TextView
-            style="@style/TextAppearance.Material3.TitleMedium"
+            style="@style/TextAppearance.Material3.TitleSmall"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:padding="16dp"
+            android:padding="8dp"
             android:text="● 使用内置对话框" />
 
         <RadioGroup
@@ -46,7 +46,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:layout_marginHorizontal="16dp"
-            android:text="开始下载"
+            android:text="显示弹窗"
             android:textAllCaps="false" />
 
         <com.google.android.material.divider.MaterialDivider
@@ -56,10 +56,10 @@
             android:layout_marginVertical="16dp" />
 
         <TextView
-            style="@style/TextAppearance.Material3.TitleMedium"
+            style="@style/TextAppearance.Material3.TitleSmall"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:padding="16dp"
+            android:padding="8dp"
             android:text="● 直接开始下载，使用进度条展示下载进度" />
 
         <LinearLayout
@@ -73,9 +73,9 @@
                 android:id="@+id/number_progress_bar"
                 style="@style/Widget.AppCompat.ProgressBar.Horizontal"
                 android:layout_width="0dp"
-                android:paddingBottom="8dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="1" />
+                android:layout_weight="1"
+                android:paddingBottom="8dp" />
 
             <TextView
                 android:id="@+id/tv_percent"
@@ -98,14 +98,13 @@
         <com.google.android.material.divider.MaterialDivider
             android:layout_width="match_parent"
             android:layout_height="6px"
-
-            android:layout_marginVertical="16dp" />
+            android:layout_marginVertical="8dp" />
 
         <TextView
-            style="@style/TextAppearance.Material3.TitleMedium"
+            style="@style/TextAppearance.Material3.TitleSmall"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:padding="16dp"
+            android:padding="8dp"
             android:text="● 自定义弹窗" />
 
         <RadioGroup
@@ -117,9 +116,9 @@
 
             <RadioButton
                 android:id="@+id/pixel"
-                android:checked="true"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:checked="true"
                 android:text="仿系统升级" />
 
             <RadioButton
@@ -135,39 +134,44 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:layout_marginHorizontal="16dp"
-            android:text="开始下载"
+            android:text="显示弹窗"
             android:textAllCaps="false" />
 
         <com.google.android.material.divider.MaterialDivider
             android:layout_width="match_parent"
             android:layout_height="6px"
-            android:layout_marginVertical="16dp" />
+            android:layout_marginVertical="8dp" />
 
-        <Button
-            android:id="@+id/btn_4"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginHorizontal="16dp"
-            android:text="@string/layout_cancel"
-            android:textAllCaps="false" />
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/btn_5"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginHorizontal="16dp"
-            android:text="删除下载的apk"
-            android:textAllCaps="false" />
+            <Button
+                android:id="@+id/btn_4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:text="@string/layout_cancel"
+                android:textAllCaps="false" />
+
+            <Button
+                android:id="@+id/btn_5"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:text="删除下载的apk"
+                android:textAllCaps="false" />
+
+        </LinearLayout>
 
         <Button
             android:id="@+id/btn_6"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="center"
             android:layout_marginHorizontal="16dp"
             android:text="compose版本ui"
             android:textAllCaps="false" />
+
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
