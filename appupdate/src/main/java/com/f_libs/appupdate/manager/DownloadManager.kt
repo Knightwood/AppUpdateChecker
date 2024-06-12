@@ -3,7 +3,6 @@ package com.f_libs.appupdate.manager
 import android.app.Activity
 import android.app.Application
 import android.app.NotificationChannel
-import android.content.Intent
 import android.util.Log
 import androidx.annotation.LayoutRes
 import com.f_libs.appupdate.base.BaseHttpDownloadManager
@@ -16,6 +15,7 @@ import com.f_libs.appupdate.util.ApkUtil
 import com.f_libs.appupdate.util.LogUtil
 import com.f_libs.appupdate.util.NotNullSingleVar
 import com.f_libs.appupdate.util.NullableSingleVar
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
@@ -23,13 +23,17 @@ import kotlinx.coroutines.flow.map
  * @author KnightWood
  */
 class DownloadManager private constructor(
-    var config: DownloadConfig,
-    val application: Application
+    var config: DownloadConfig, val application: Application
 ) {
     /**
      * 是否正在下载
      */
     var downloading: Boolean = false
+
+    /**
+     * 是否正在执行静默下载。
+     */
+    var isBackDownload: Boolean = false
 
     /**
      * 下载状态流
@@ -44,10 +48,13 @@ class DownloadManager private constructor(
     init {
         downloadStateFlow.map {
             downloading = when (it) {
-                is DownloadStatus.Cancel,
-                is DownloadStatus.Done,
-                is DownloadStatus.Error,
-                is DownloadStatus.IDLE -> {
+                is DownloadStatus.Done -> {
+                    progressFlow.tryEmit(0f)
+                    release()
+                    false
+                }
+
+                is DownloadStatus.Cancel, is DownloadStatus.Error, is DownloadStatus.IDLE -> {
                     progressFlow.tryEmit(0f)
                     false
                 }
@@ -60,6 +67,11 @@ class DownloadManager private constructor(
                 is DownloadStatus.Start -> {
                     true
                 }
+
+                DownloadStatus.End -> {
+                    progressFlow.tryEmit(0f)
+                    false
+                }
             }
         }
     }
@@ -69,22 +81,21 @@ class DownloadManager private constructor(
      */
     fun canDownload(): Boolean {
         val params = checkParams()
-        val versionCodeCheck: Boolean =
-            if (config.apkVersionCode == Int.MAX_VALUE) {
-                true
-            } else {
-                config.apkVersionCode > ApkUtil.getVersionCode(application)
-            }
-        return (params && versionCodeCheck)
+        val versionCodeCheck: Boolean = if (config.apkVersionCode == Int.MAX_VALUE) {
+            true
+        } else {
+            config.apkVersionCode > ApkUtil.getVersionCode(application)
+        }
+        return (params && versionCodeCheck && !downloading)
 
     }
 
     /**
      * download file without dialog
      */
-    fun checkThenDownload() {
+    fun checkThenDownload(useBackDownload: Boolean = false) {
         if (canDownload()) {
-            application.startService(Intent(application, DownloadService::class.java))
+            directDownload(useBackDownload)
         } else {
             Log.e(TAG, "download: cannot download")
         }
@@ -93,8 +104,14 @@ class DownloadManager private constructor(
     /**
      * with out check whether can download, so you need to check it yourself
      */
-    fun directDownload() {
-        application.startService(Intent(application, DownloadService::class.java))
+    fun directDownload(useBackDownload: Boolean = false) {
+        if (useBackDownload) {
+            if (config.apkMD5.isBlank() || config.apkMD5.isEmpty()) {
+                throw IllegalArgumentException("apkMD5 can not be empty!")
+            }
+        }
+        isBackDownload = useBackDownload
+        DownloadService.startService(application)
     }
 
     private fun checkParams(): Boolean {
@@ -121,15 +138,18 @@ class DownloadManager private constructor(
     /**
      * 取消下载，如果httpManager不存在，则直接执行then
      *
+     * 在静默下载时，不可取消;不处于下载中，不可取消
+     *
      * @param then
      */
     fun cancel(then: () -> Unit = {}) {
-        config.httpManager?.cancel() ?: then()
+        if (!isBackDownload && downloading) {
+            config.httpManager?.cancel() ?: then()
+        }
     }
 
     /**
      * 取消下载
-     *
      */
     fun cancelDirectly() {
         config.httpManager?.cancel()
@@ -138,15 +158,22 @@ class DownloadManager private constructor(
     /**
      * release objects
      */
-    internal fun release() {
+    fun release() {
         config.httpManager?.release()
-        clearListener()
-        instance = null
+        this.isBackDownload = false
+        downloadStateFlow.tryEmit(DownloadStatus.End)
+        config.onButtonClickListener = null
+        config.onDownloadListeners.clear()
     }
 
-    internal fun reConfig(config: DownloadConfig) {
+    /**
+     * 建议重新配置时，先通过[canModify]检查
+     */
+    fun reConfig(config: DownloadConfig) {
         this.config.httpManager?.release()
         this.config = config
+        this.isBackDownload = false
+        this.downloadStateFlow.tryEmit(DownloadStatus.IDLE)
     }
 
     fun registerButtonListener(onButtonClickListener: OnButtonClickListener) {
@@ -157,10 +184,6 @@ class DownloadManager private constructor(
         config.onDownloadListeners.add(onDownloadListener)
     }
 
-    fun clearListener() {
-        config.onButtonClickListener = null
-        config.onDownloadListeners.clear()
-    }
 
     companion object {
         private const val TAG = "DownloadManager"
@@ -182,25 +205,39 @@ class DownloadManager private constructor(
 
         /**
          * 尽量不要自行调用，而是使用[config]方法
+         *
          * @param config DownloadConfig?
          * @param application Application?
          * @return DownloadManager
          */
         fun getInstance(
-            config: DownloadConfig? = null,
-            application: Application? = null
+            config: DownloadConfig? = null, application: Application? = null
         ): DownloadManager {
-            if (instance != null && config != null) {
-                instance!!.reConfig(config)
-            }
-            if (instance == null) {
+            val instanceInner = instance
+            if (instanceInner != null) {
+                if (config != null && instanceInner.canModify()) {
+                    instanceInner.reConfig(config)
+                }
+            } else {
                 if (config == null || application == null) throw IllegalArgumentException("config or application is null")
                 synchronized(this) {
-                    instance ?: DownloadManager(config, application).also { instance = it }
+                    instance ?: DownloadManager(config, application).also {
+                        instance = it
+                    }
                 }
             }
             return instance!!
         }
+    }
+
+    private fun canModify(): Boolean {
+        if (
+            downloadStateFlow.value == DownloadStatus.End
+            || downloadStateFlow.value == DownloadStatus.IDLE
+        ) {
+            return true
+        }
+        return false
     }
 
 
@@ -227,8 +264,8 @@ class DownloadManager private constructor(
         var apkVersionName = ""
 
         /**
-         * The file path where the Apk is saved
-         * eg: /storage/emulated/0/Android/data/ your packageName /cache
+         * The file path where the Apk is saved eg:
+         * /storage/emulated/0/Android/data/ your packageName /cache
          */
         var downloadPath = ApkUtil.getDefaultCachePath(application)
 
@@ -282,12 +319,14 @@ class DownloadManager private constructor(
         var showNotification = true
 
         /**
-         * Whether the installation page will pop up automatically after the download is complete
+         * Whether the installation page will pop up automatically after the
+         * download is complete
          */
         var jumpInstallPage = true
 
         /**
-         * Does the download start tip "Downloading a new version in the background..."
+         * Does the download start tip "Downloading a new version in the
+         * background..."
          */
         var showBgdToast = true
 
@@ -332,15 +371,23 @@ class DownloadManager private constructor(
                         }
                     }
                 }
+            } else {
+                httpManager?.path = downloadPath
             }
             return httpManager!!
         }
 
         /**
-         * 真正的下载
+         * 真正的下载，而且可以重写设定好的下载路径
+         *
          * @return Flow<DownloadStatus>
          */
-        internal fun download() = getOneHttpManager().download(apkUrl, apkName)
+        internal fun download(newCachePath: String? = null): Flow<DownloadStatus> {
+            newCachePath?.let {
+                downloadPath = it
+            }
+            return getOneHttpManager().download(apkUrl, apkName)
+        }
 
         @Deprecated("未来将会移除")
         var viewConfig: DialogConfig = DialogConfig()
@@ -386,9 +433,10 @@ class DownloadManager private constructor(
 
     /**
      * 兼容旧方式
+     *
+     * @constructor
      * @property config DownloadConfig
      * @property dialogConfig DialogConfig
-     * @constructor
      */
     class Builder constructor(activity: Activity) {
         val ctx = activity.application

@@ -4,8 +4,12 @@ import com.f_libs.appupdate.base.BaseHttpDownloadManager
 import com.f_libs.appupdate.base.bean.DownloadStatus
 import com.f_libs.appupdate.config.Constant
 import com.f_libs.appupdate.util.LogUtil
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -30,7 +34,7 @@ import javax.net.ssl.X509TrustManager
  */
 
 @Suppress("BlockingMethodInNonBlockingContext")
-class HttpDownloadManager(private val path: String) : BaseHttpDownloadManager() {
+class HttpDownloadManager(path: String) : BaseHttpDownloadManager(path) {
     companion object {
         private const val TAG = "HttpDownloadManager"
     }
@@ -67,7 +71,12 @@ class HttpDownloadManager(private val path: String) : BaseHttpDownloadManager() 
             var len: Int
             var progress = 0
             val buffer = ByteArray(1024 * 2)
-            val file = File(path, apkName)
+            // 检查文件夹是否存在
+            val dir = File(path)
+            if (!dir.exists()){
+                dir.mkdirs()
+            }
+            val file = File(path, apkName)//目标文件
             FileOutputStream(file).use { out ->
                 while (inStream.read(buffer).also { len = it } != -1 && !shutdown) {
                     out.write(buffer, 0, len)

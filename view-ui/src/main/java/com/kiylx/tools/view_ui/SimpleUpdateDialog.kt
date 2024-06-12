@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.util.Log
 import android.view.View
+import android.view.Window
 import android.widget.Button
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.drawable.DrawableCompat
@@ -19,14 +20,19 @@ import java.io.File
 
 /**
  * @author KnightWood
- *
  */
 class SimpleUpdateDialog {
     companion object {
         /**
          * 展示弹窗，以及下载安装更新
          */
-        fun openAlertDialog(activity: Activity, manager: DownloadManager) {
+        fun openAlertDialog(
+            activity: Activity, manager: DownloadManager,
+            cacheFilePath: String? = ApkUtil.findBackDownloadApk(
+                activity.applicationContext,
+                manager.config.apkMD5
+            )?.absolutePath,
+        ) {
             val TAG = "SimpleUpdateDialog"
             var action = Action.downloading
             var apkFile: File? = null
@@ -35,7 +41,7 @@ class SimpleUpdateDialog {
             //弹窗
             val dialogBuilder = MaterialAlertDialogBuilder(
                 activity,
-                R.style.MyAlertDialogTheme
+                R.style.MyAlertTheme
             ).apply {
                 setTitle(
                     String.format(
@@ -68,10 +74,7 @@ class SimpleUpdateDialog {
                 setIcon(icon)
                 setCancelable(!manager.config.forcedUpgrade)
                 if (!manager.config.forcedUpgrade) {
-                    setNegativeButton(R.string.cancel) { dialog_interface, _ ->
-                        manager.config.onButtonClickListener?.onButtonClick(OnButtonClickListener.CANCEL)
-                        dialog_interface.dismiss()
-                    }
+                    setNegativeButton(R.string.cancel, null)
                 }
                 mView.appUpdateTvSize.setText(
                     String.format(
@@ -90,9 +93,32 @@ class SimpleUpdateDialog {
                 positiveButton.isEnabled = false
             }
             dialogBuilder.show().apply {
+                val window: Window = this.getWindow()!!
+                //判断是否横屏
+//                if (activity.resources.configuration.orientation != ORIENTATION_LANDSCAPE) {
+//                    val width: Int = activity.getResources().getDisplayMetrics().widthPixels
+//                    window.setLayout(
+//                        (width * 0.9).toInt(),
+//                        DensityUtil.dip2px(activity, 600f).toInt()
+//                    )
+//                } else {
+//                    val height: Int = activity.getResources().getDisplayMetrics().heightPixels
+//                    window.setLayout(
+//                        DensityUtil.dip2px(activity, 450f).toInt(),
+//                        (height * 0.95).toInt(),
+//                    )
+//                }
+//                window.findViewById<TextView>(androidx.appcompat.R.id.alertTitle).run {
+//                    textSize = 24f
+//                }
                 getButton(AlertDialog.BUTTON_POSITIVE).also { positiveButton ->
                     if (manager.downloading) {
                         showProgressUi(positiveButton)
+                    }
+                    if (cacheFilePath != null) {
+                        Log.d(TAG, "openAlertDialog: $cacheFilePath")
+                        action = Action.readyInstall
+                        positiveButton.setText(R.string.install)
                     }
                     mOnDownloadListener = object : OnDownloadListener {
                         override fun cancel() {}
@@ -128,6 +154,9 @@ class SimpleUpdateDialog {
                     positiveButton.setOnClickListener {
                         manager.config.onButtonClickListener?.onButtonClick(OnButtonClickListener.UPDATE)
                         if (action == Action.readyInstall) {
+                            if (cacheFilePath != null) {
+                                apkFile = File(cacheFilePath)
+                            }
                             apkFile?.let { it1 ->
                                 dismiss()
                                 ApkUtil.installApk(activity, Constant.AUTHORITIES!!, it1)
@@ -143,6 +172,7 @@ class SimpleUpdateDialog {
                     negativeButton.setOnClickListener {
                         dismiss()
                         manager.cancel()
+                        manager.config.onButtonClickListener?.onButtonClick(OnButtonClickListener.CANCEL)
                         manager.config.onDownloadListeners.remove(mOnDownloadListener)
                     }
                 }

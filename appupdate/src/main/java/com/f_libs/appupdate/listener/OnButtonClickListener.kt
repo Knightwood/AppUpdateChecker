@@ -14,7 +14,7 @@ package com.f_libs.appupdate.listener
 interface OnButtonClickListener {
     companion object {
         /**
-         * click update button
+         * click update button to install apk
          */
         const val UPDATE = 0
 
@@ -22,7 +22,13 @@ interface OnButtonClickListener {
          * click cancel button
          */
         const val CANCEL = 1
+
+        /**
+         * download file
+         */
+        const val DOWNLOAD=2
+
     }
 
-    fun onButtonClick(id: Int)
+    fun onButtonClick(action: Int)
 }

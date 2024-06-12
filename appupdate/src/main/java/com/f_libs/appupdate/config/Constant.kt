@@ -57,5 +57,18 @@ object Constant {
      */
     var APK_PATH = "/storage/emulated/0/Android/data/%s/cache"
 
+    /**
+     * 下载目录
+     */
     var cacheDirName ="AppUpdateCache"
+
+    /**
+     * 静默下载目录
+     */
+    var backCacheDirName ="AppUpdateBackCache"
+
+    /**
+     * 使用静默下载
+     */
+    var useBackDownload ="useBackDownload"
 }

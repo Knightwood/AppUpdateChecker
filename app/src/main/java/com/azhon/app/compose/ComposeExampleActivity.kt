@@ -1,6 +1,7 @@
 package com.azhon.app.compose
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.azhon.app.R
 import com.azhon.app.compose.ui.theme.AppUpdateTheme
+import com.f_libs.appupdate.listener.OnButtonClickListener
 import com.f_libs.appupdate.manager.DownloadManager
 import com.kiylx.tools.compose_ui.AlertUpdateDialog
 import com.kiylx.tools.compose_ui.ColorfulUpdateDialog
@@ -29,17 +31,27 @@ class ComposeExampleActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         manager = DownloadManager.config(application) {
             apkUrl = url
+
             apkName = appName
             apkVersionCode = 2
             apkVersionName = "v4.2.1"
             apkSize = "7.7MB"
-            apkDescription = getString(R.string.dialog_msg)+getString(R.string.dialog_msg)
+            apkDescription = getString(R.string.dialog_msg) + getString(R.string.dialog_msg)
             enableLog(true)
             jumpInstallPage = false
+
             showNotification = true
             showBgdToast = false
             forcedUpgrade = false
         }
+        manager.registerButtonListener(object : OnButtonClickListener {
+            override fun onButtonClick(action: Int) {
+                Log.d(TAG, "onButtonClick: $action")
+                if (action == OnButtonClickListener.CANCEL && !manager.downloading) {
+                    manager.directDownload(true)//client download
+                }
+            }
+        })
         setContent {
             var openDialog by remember { mutableStateOf(false) }
             var openDialog2 by remember { mutableStateOf(false) }
@@ -53,7 +65,7 @@ class ComposeExampleActivity : ComponentActivity() {
                     if (openDialog) {
                         AlertUpdateDialog(
                             context = this,
-                            downloadManager = manager
+                            downloadManager = manager,
                         ) {
                             openDialog = false
                         }
@@ -86,4 +98,7 @@ class ComposeExampleActivity : ComponentActivity() {
         }
     }
 
+    companion object {
+        const val TAG = "Compose_update"
+    }
 }

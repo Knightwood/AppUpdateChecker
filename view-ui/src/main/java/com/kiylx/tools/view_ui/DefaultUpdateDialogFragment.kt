@@ -33,7 +33,7 @@ open class DefaultUpdateDialogFragment : BaseUpdateDialogFragment() {
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
             wlp.gravity = Gravity.CENTER
-            wlp.width = DensityUtil.dip2px(this.requireContext(),300f).toInt()
+            wlp.width = DensityUtil.dip2px(this.requireContext(), 300f).toInt()
             wlp.height = WindowManager.LayoutParams.WRAP_CONTENT
             window.attributes = wlp
         }
@@ -42,7 +42,7 @@ open class DefaultUpdateDialogFragment : BaseUpdateDialogFragment() {
 
     override fun initView() {
         super.initView()
-        progressBar().visibility =View.INVISIBLE
+        progressBar().visibility = View.INVISIBLE
         tvTitle().setText("发现新版${manager.config.apkVersionName}可以下载啦！")
     }
 
@@ -58,9 +58,22 @@ open class DefaultUpdateDialogFragment : BaseUpdateDialogFragment() {
     companion object {
         const val TAG = "DefaultUpdateDialogFragment"
 
-        fun open(host: FragmentActivity) {
+        /**
+         * 如果要安装一个已存在的文件，请设置cacheFilePath参数
+         * 例如安装静默下载的文件
+         * ```
+         * open(host=host,
+         *      cacheFilePath=ApkUtil.findBackDownloadApk(requireContext(), manager.config.apkMD5)?.absolutePath
+         * )
+         * ```
+         */
+        fun open(
+            host: FragmentActivity,
+            cacheFilePath: String? = null,
+        ) {
             host.run {
                 val dialog = DefaultUpdateDialogFragment()
+                dialog.setCacheFile(cacheFilePath)
                 val ft = supportFragmentManager.beginTransaction()
                 ft.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
                 dialog.show(ft, TAG)

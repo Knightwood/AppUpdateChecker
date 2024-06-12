@@ -6,11 +6,8 @@ import java.math.BigInteger
 import java.security.MessageDigest
 
 /**
- * ProjectName: AppUpdate
- * PackageName: com.azhon.appupdate.util
- * FileName:    FileUtil
- * CreateDate:  2022/4/7 on 11:52
- * Desc:
+ * ProjectName: AppUpdate PackageName: com.azhon.appupdate.util FileName:
+ * FileUtil CreateDate: 2022/4/7 on 11:52 Desc:
  *
  * @author azhon
  */
@@ -41,6 +38,33 @@ class FileUtil {
                 e.printStackTrace()
             }
             return ""
+        }
+
+
+        fun rename(file: File, newName: String): Boolean {
+            // file doesn't exist then return false
+            if (!file.exists()) return false
+            // the new name is space then return false
+            if (newName.isEmpty() || newName.isBlank()) return false
+            // the new name equals old name then return true
+            if (newName == file.name) return true
+            val newFile = File(file.parent + File.separator + newName)
+            // the new name of file exists then return false
+            return (!newFile.exists()
+                    && file.renameTo(newFile))
+        }
+
+        /**
+         * 将文件移动到另一个目录
+         */
+        fun moveTo(file: File, anotherFolder: String): File? {
+            //将file移动到anotherFolder目录下
+            if (file.exists()) {
+                val newFile = File(anotherFolder + File.separator + file.name)
+                file.renameTo(newFile)
+                return newFile
+            }
+            return null
         }
     }
 }

@@ -2,9 +2,8 @@ package com.kiylx.tools.compose_ui
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -13,16 +12,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.f_libs.appupdate.base.bean.DownloadStatus
 import com.f_libs.appupdate.manager.DownloadManager
+import com.f_libs.appupdate.util.ApkUtil
+import java.io.File
+
+private val TAG = "Update1"
 
 @Composable
 fun BasicUpdateDialog(
     modifier: Modifier = Modifier,
     context: Context,
     downloadManager: DownloadManager,
+    cacheFile: File? = ApkUtil.findBackDownloadApk(context, downloadManager.config.apkMD5),
     dismiss: () -> Unit,
     content: @Composable (
         config: DownloadManager.DownloadConfig,
-        downloadState: State<DownloadStatus>,
         downloading: () -> Boolean,
         startDownload: () -> Unit,
         cancelDownload: () -> Unit,
@@ -30,16 +33,17 @@ fun BasicUpdateDialog(
         buttonState: ButtonState,
     ) -> Unit
 ) {
-
-
-    val downloadState = downloadManager.downloadStateFlow.collectAsState()
-
     var progressValue by remember {
         mutableFloatStateOf(0f)
     }
 
+    var apk by remember {
+        mutableStateOf(cacheFile)
+    }
+
     var buttonState by remember {
-        mutableStateOf(ButtonState(downloadManager.canDownload(), R.string.update))
+        val b = downloadManager.canDownload()
+        mutableStateOf(ButtonState(b, R.string.update, action = Action.idle))
     }
 
     LaunchedEffect(key1 = Unit, block = {
@@ -48,7 +52,9 @@ fun BasicUpdateDialog(
                 DownloadStatus.Cancel -> {
                     buttonState = ButtonState(
                         enable = false,
-                        stringId = R.string.canceled
+                        stringId = R.string.canceled,
+                        action = Action.canceled,
+                        file = null
                     )
                     dismiss()
                 }
@@ -57,7 +63,13 @@ fun BasicUpdateDialog(
                     if (downloadManager.config.jumpInstallPage) {
                         dismiss()
                     } else {
-                        buttonState = ButtonState(enable = true, stringId = R.string.install)
+                        apk =it.apk
+                        buttonState = ButtonState(
+                            enable = true,
+                            stringId = R.string.install,
+                            action = Action.readyInstall,
+                            file = apk
+                        )
                     }
                 }
 
@@ -68,22 +80,42 @@ fun BasicUpdateDialog(
                 is DownloadStatus.Error -> {
                     buttonState = ButtonState(
                         enable = false,
-                        stringId = com.f_libs.appupdate.R.string.app_update_download_error
+                        stringId = com.f_libs.appupdate.R.string.app_update_download_error,
+                        action = Action.error,
+                        file = null
                     )
-                    dismiss()
                 }
 
                 DownloadStatus.IDLE -> {
+                    if (apk != null) {
+                        buttonState = ButtonState(
+                            enable = true, stringId = R.string.install,
+                            file = apk, action = Action.readyInstall
+                        )
+                    } else {
+                        buttonState = ButtonState(
+                            enable = downloadManager.canDownload(),
+                            stringId = R.string.update,
+                            action = Action.idle,
+                            file = null
+                        )
+                    }
+                }
+
+                DownloadStatus.End -> {
                     buttonState = ButtonState(
-                        enable = downloadManager.canDownload(),
-                        stringId = R.string.update
+                        enable = true, stringId = R.string.install,
+                        file = apk, action = Action.readyInstall
                     )
+
                 }
 
                 DownloadStatus.Start -> {
                     buttonState = ButtonState(
                         enable = false,
-                        stringId = R.string.app_downloading
+                        stringId = R.string.app_downloading,
+                        action = Action.downloading,
+                        file = null
                     )
                 }
             }
@@ -91,23 +123,38 @@ fun BasicUpdateDialog(
     })
     content(
         downloadManager.config,
-        downloadState,
         { downloadManager.downloading },
         downloadManager::directDownload,
-        downloadManager::cancelDirectly,
+        downloadManager::canDownload,
         progressValue,
         buttonState,
     )
 }
 
 /**
- * @author KnightWood
+ * @constructor
  * @property enable Boolean
  * @property visibility Int
  * @property stringId Int
- * @constructor
+ * @author KnightWood
  */
+@Immutable
 data class ButtonState(
     val enable: Boolean = true,
-    val stringId: Int
+    val stringId: Int, //string resource id
+    val file: File? = null,
+    val action: Int = Action.idle,
 ) : java.io.Serializable
+
+class Action {
+    companion object {
+        //mode
+        const val idle = 0x01//初始状态
+        const val downloading = 0x02//下载中
+        const val readyInstall = 0x04//准备安装
+
+        const val canceled = 0x05//下载已取消
+        const val error = 0x06//下载失败
+        const val end = 0X07//下载流程结束
+    }
+}

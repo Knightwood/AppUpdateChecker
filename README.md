@@ -3,7 +3,6 @@
   <img src="https://img.shields.io/badge/license-Apache2.0-orange.svg">
 </p>
 
-
 # compose版本效果图
 
 <img src="img/zh/compose_1.png" width="300"><img src="img/zh/compose_2.png" width="300">
@@ -14,7 +13,6 @@
 <img src="img/zh/zh_3.png" width="300"><img src="img/zh/zh_4.png" width="300">
 <img src="img/zh/zh_5.png" width="300"><img src="img/zh/zh_6.png" width="300">
 <img src="img/zh/zh_7.png" width="300">
-
 
 # demo中的自定义下载弹窗示例
 
@@ -46,7 +44,7 @@
 1.2.0
 implementation("com.github.knightwood:AppUpdateChecker:1.2.0")
 
-1.2.0之后版本开始：
+1.2.0 之后版本开始 ：
 implementation("com.github.Knightwood.AppUpdateChecker:appupdatechecker-core:last_version") //必选，当然，你也可以抛开下面的界面实现，完全自己实现界面。没有界面亦一样使用
 implementation("com.github.Knightwood.AppUpdateChecker:appupdatechecker-compose-ui:last_version") //compose版本的下载界面，可选
 implementation("com.github.Knightwood.AppUpdateChecker:appupdatechecker-view-ui:last_version") //view体系下的下载界面，可选
@@ -92,9 +90,11 @@ val manager = DownloadManager.config(application) {
 ```kotlin
     DownloadManager.isDownloading()
 ```
+
 ## 3.显示更新弹窗
 
 ### view版本
+
 * 内置界面
 
 ```kotlin
@@ -166,7 +166,6 @@ Button(onClick = {
 }
 ```
 
-
 ## 配置下载信息得到DownloadManager详细用法
 
 ### 使用DownloadManager.DownloadConfig配置DownloadManager
@@ -226,30 +225,30 @@ DownloadManager的一些其他配置项
 manager.registerDownloadListener(listenerAdapter)//自行监听下载进度
 manager.clearListener()//清除下载监听
 manager.checkThenDownload()//立即开始下载
-   
+
 
 ```
+
 下载监听除了可以使用`registerDownloadListener`，还可以监听downloadManager中的状态流,
 下面是DownloadManager中的状态变量
 
 ```kotlin
   /**
-     * 是否正在下载
-     */
-    var downloading: Boolean = false
+ * 是否正在下载
+ */
+var downloading: Boolean = false
 
-    /**
-     * 下载事件状态流
-     */
-    var downloadStateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow(DownloadStatus.IDLE)
+/**
+ * 下载事件状态流
+ */
+var downloadStateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow(DownloadStatus.IDLE)
 
-    /**
-     * 百分比进度
-     */
-    val progressFlow: MutableStateFlow<Float> = MutableStateFlow(0f)
+/**
+ * 百分比进度
+ */
+val progressFlow: MutableStateFlow<Float> = MutableStateFlow(0f)
 
 ```
-
 
 ## 自定义界面
 
@@ -290,8 +289,9 @@ override fun initProgressBar() {
 示例：
 
 1. 继承BaseUpdateDialogFragment
-2. 
-   BaseUpdateDialogFragment已经封装了进度监听之类的东西，你只需要自定义界面就行
+2.
+
+BaseUpdateDialogFragment已经封装了进度监听之类的东西，你只需要自定义界面就行
 
 ```kotlin
 class Win8UpdateDialogFragment : BaseUpdateDialogFragment() {
@@ -341,7 +341,7 @@ class Win8UpdateDialogFragment : BaseUpdateDialogFragment() {
 ```
 
 2. 展示界面
-直接配置到manager，然后显示你的界面即可，BaseUpdateDialogFragment基类会自动监听下载状态
+   直接配置到manager，然后显示你的界面即可，BaseUpdateDialogFragment基类会自动监听下载状态
 
 ```kotlin
 //跟往常一样构造DownloadManager
@@ -361,50 +361,50 @@ Win8UpdateDialogFragment.open(this)
 
 ```kotlin
     BasicUpdateDialog(
-  modifier = modifier,
-  context = context,
-  downloadManager = downloadManager,
-  dismiss = dismiss,
-  content = {
-      config: DownloadManager.DownloadConfig,
-      downloadState: State<DownloadStatus>,
-      downloading: () -> Boolean,
-      startDownload: () -> Unit,
-      cancelDownload: () -> Unit,
-      progressValue: Float,
-      buttonState: ButtonState,
-    ->
-    SampleUpdateDialog(
-      modifier = modifier,
-      config = config,
-      dismiss = dismiss,
-      downloadState = downloadState,
-      downloading = downloading,
-      startDownload = startDownload,
-      cancelDownload = cancelDownload,
-      progressValue = progressValue,
-      buttonState = buttonState,
-      context = context,
-    )
+    modifier = modifier,
+    context = context,
+    downloadManager = downloadManager,
+    dismiss = dismiss,
+    content = {
+            config: DownloadManager.DownloadConfig,
+            downloadState: State<DownloadStatus>,
+            downloading: () -> Boolean,
+            startDownload: () -> Unit,
+            cancelDownload: () -> Unit,
+            progressValue: Float,
+            buttonState: ButtonState,
+        ->
+        SampleUpdateDialog(
+            modifier = modifier,
+            config = config,
+            dismiss = dismiss,
+            downloadState = downloadState,
+            downloading = downloading,
+            startDownload = startDownload,
+            cancelDownload = cancelDownload,
+            progressValue = progressValue,
+            buttonState = buttonState,
+            context = context,
+        )
 
-  }
+    }
 )
 
 //实际显示内容
 @Composable
 private fun SampleUpdateDialog(
-  modifier: Modifier,
-  config: DownloadManager.DownloadConfig,
-  dismiss: () -> Unit,//关闭界面
-  downloadState: State<DownloadStatus>,//下载状态
-  downloading: () -> Boolean,//是否正在下载
-  startDownload: () -> Unit,//调用函数开始下载
-  cancelDownload: () -> Unit,//调用函数取消下载
-  progressValue: Float,//进度，文件的大小
-  buttonState: ButtonState,//更新按钮状态，封装了文本显示和按钮enabled状态
-  context: Context,
+    modifier: Modifier,
+    config: DownloadManager.DownloadConfig,
+    dismiss: () -> Unit,//关闭界面
+    downloadState: State<DownloadStatus>,//下载状态
+    downloading: () -> Boolean,//是否正在下载
+    startDownload: () -> Unit,//调用函数开始下载
+    cancelDownload: () -> Unit,//调用函数取消下载
+    progressValue: Float,//进度，文件的大小
+    buttonState: ButtonState,//更新按钮状态，封装了文本显示和按钮enabled状态
+    context: Context,
 ) {
-    
+
 }
 
 ```
@@ -448,4 +448,101 @@ val result =
 
 //删除所有下载的文件
 ApkUtil.deleteDefaultCacheDir(application)
+```
+
+### 静默下载
+
+调用`manager.directDownload(true)`即可开始静默下载。静默下载不会有通知栏消息，不会自动跳转安装，但是是有进度通知的，方便做一些监听处理。
+
+对于静默下载，需要设置`apkMD5`
+，文件在下载之后，会保存在`/sdcard/Android/data/包名/cache/AppUpdateBackCache`下，并计算出下载文件的md5值进行重命名。
+
+你可以使用`deleteBackDownloadCacheDir`方法删除下载的缓存文件。
+你可以通过`DownloadManager.isBackDownload`判断是否当前处于静默下载。
+同时，`DownloadManager.downloadStateFlow`之类的状态也都是正常可用的。
+
+静默下载之后，内置ui界面会自动判断，是否存在匹配的md5的安装包，如果存在，则可以直接点击安装。
+
+下载服务也会自动判断是否存在匹配的md5的安装包，如果存在，则直接视为下载完成。
+
+#### 使用示例：
+
+##### view版本
+
+```kotlin
+   manager = DownloadManager.config(application) {
+    //这里忽略了其它参数的设置，静默下载必须设置md5值
+    apkMD5 = "3e4ed027f0b9dd68c335b5338e6a1b1f"
+}
+//注册按钮监听
+manager.registerButtonListener(object : OnButtonClickListener {
+    override fun onButtonClick(action: Int) {
+        Log.d(TAG, "onButtonClick: $action")
+        //如果点击了取消，并且不处于下载状态，则可以静默下载
+        if (action == OnButtonClickListener.CANCEL && !manager.downloading) {
+            manager.directDownload(true)//静默下载
+        }
+    }
+})
+showDownloadDialog(manager, updateDialogType = viewStyle)
+```
+
+##### compose版本
+
+```kotlin
+manager = DownloadManager.config(application) {
+    //这里忽略了其它参数的设置，静默下载必须设置md5值
+    apkMD5 = "3e4ed027f0b9dd68c335b5338e6a1b1f"
+}
+manager.registerButtonListener(object : OnButtonClickListener {
+    override fun onButtonClick(action: Int) {
+        Log.d(TAG, "onButtonClick: $action")
+        if (action == OnButtonClickListener.CANCEL && !manager.downloading) {
+            manager.directDownload(true)//client download
+        }
+    }
+})
+
+//ui界面
+var openDialog by remember { mutableStateOf(false) }
+
+if (openDialog) {
+    AlertUpdateDialog(
+        context = this,
+        downloadManager = manager
+    ) {
+        openDialog = false
+    }
+}
+```
+
+#### 只显示界面，安装特定路径下的安装包
+
+这个功能是在某些场景下，安装特定路径下的安装包，而不是使用默认的静默下载路径下的安装包。
+
+* view版本
+
+```kotlin
+DefaultUpdateDialogFragment.open(activity, cacheApkFilePath)
+
+SimpleUpdateDialog.openAlertDialog(activity, downloadManager, cacheApkFilePath)
+```
+
+* compose版本
+
+```kotlin
+AlertUpdateDialog(
+    context = this,
+    downloadManager = manager,
+    cacheFile = File(path),
+)
+
+ColorfulUpdateDialog(
+    context = this,
+    downloadManager = manager,
+    cacheFile = File(path),
+    confirmButton = { modifier, text, enabled, onClick ->
+        ConfirmButton(modifier, text, enabled, onClick)
+    }
+)
 ```

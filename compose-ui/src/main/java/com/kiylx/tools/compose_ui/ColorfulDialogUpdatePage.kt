@@ -1,6 +1,7 @@
 package com.kiylx.tools.compose_ui
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -25,7 +26,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -33,12 +33,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.f_libs.appupdate.base.bean.DownloadStatus
 import com.f_libs.appupdate.config.Constant
+import com.f_libs.appupdate.listener.OnButtonClickListener
 import com.f_libs.appupdate.manager.DownloadManager
 import com.f_libs.appupdate.util.ApkUtil
 import com.kiylx.tools.compose_ui.component.ConfirmButton
 import com.kiylx.tools.compose_ui.component.FreeSealDialog
+import java.io.File
 
 @Composable
 fun ColorfulUpdateDialog(
@@ -49,6 +50,7 @@ fun ColorfulUpdateDialog(
         ConfirmButton(modifier1, text, enabled, onClick)
     },
     downloadManager: DownloadManager,
+    cacheFile: File? = ApkUtil.findBackDownloadApk(context, downloadManager.config.apkMD5),
     dismiss: () -> Unit,
 ) {
 
@@ -57,12 +59,12 @@ fun ColorfulUpdateDialog(
         context = context,
         downloadManager = downloadManager,
         dismiss = dismiss,
+        cacheFile = cacheFile,
         content = {
                 config: DownloadManager.DownloadConfig,
-                downloadState: State<DownloadStatus>,
-                downloading:()-> Boolean,
+                downloading: () -> Boolean,
                 startDownload: () -> Unit,
-                cancelDownload:()->Unit,
+                cancelDownload: () -> Unit,
                 progressValue: Float,
                 buttonState: ButtonState,
             ->
@@ -70,7 +72,6 @@ fun ColorfulUpdateDialog(
                 modifier = modifier,
                 config = config,
                 dismiss = dismiss,
-                downloadState = downloadState,
                 downloading = downloading,
                 startDownload = startDownload,
                 cancelDownload = cancelDownload,
@@ -89,10 +90,9 @@ private fun SampleUpdateDialog(
     modifier: Modifier,
     config: DownloadManager.DownloadConfig,
     dismiss: () -> Unit,
-    downloadState: State<DownloadStatus>,
-    downloading:()-> Boolean,
+    downloading: () -> Boolean,
     startDownload: () -> Unit,
-    cancelDownload:()->Unit,
+    cancelDownload: () -> Unit,
     progressValue: Float,
     buttonState: ButtonState,
     context: Context,
@@ -146,9 +146,12 @@ private fun SampleUpdateDialog(
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                                 .align(Alignment.Start)
                         )
-                        Column(modifier = Modifier.fillMaxWidth()
-                            .heightIn(max = 160.dp)
-                            .verticalScroll(rememberScrollState())) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 160.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
                             Text(
                                 text = config.apkDescription.replace("\\n", "\n"),
                                 style = MaterialTheme.typography.bodyMedium,
@@ -158,8 +161,7 @@ private fun SampleUpdateDialog(
                             )
                         }
                         if (
-                            downloadState.value is DownloadStatus.Downloading
-                            || downloadState.value is DownloadStatus.Start
+                            buttonState.action == Action.downloading
                         ) {
                             LinearProgressIndicator(
                                 progress = { progressValue },
@@ -173,19 +175,24 @@ private fun SampleUpdateDialog(
                             text = stringResource(id = buttonState.stringId),
                             enabled = buttonState.enable
                         ) {
-                            if (downloadState.value is DownloadStatus.Done) {
+                            if (buttonState.file != null && buttonState.action == Action.readyInstall
+                            ) {
+                                config.onButtonClickListener?.onButtonClick(OnButtonClickListener.UPDATE)
                                 //安装
                                 if (!config.jumpInstallPage) {
                                     ApkUtil.installApk(
                                         context,
                                         Constant.AUTHORITIES!!,
-                                        (downloadState.value as DownloadStatus.Done).apk
+                                        buttonState.file
                                     )
                                 }
                             } else {
+                                Log.d("fff", "SFG: failed")
                                 //执行下载
-                                if (!downloading())
+                                config.onButtonClickListener?.onButtonClick(OnButtonClickListener.DOWNLOAD)
+                                if (!downloading()) {
                                     startDownload()
+                                }
                             }
                         }
                     }
@@ -205,6 +212,7 @@ private fun SampleUpdateDialog(
             Spacer(modifier = Modifier.requiredHeight(52.dp))
             //关闭按钮
             IconButton(onClick = {
+                config.onButtonClickListener?.onButtonClick(OnButtonClickListener.CANCEL)
                 cancelDownload()
                 dismiss()
             }) {

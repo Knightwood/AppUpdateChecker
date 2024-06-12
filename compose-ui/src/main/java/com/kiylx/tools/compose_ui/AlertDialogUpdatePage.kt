@@ -13,26 +13,27 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.f_libs.appupdate.base.bean.DownloadStatus
 import com.f_libs.appupdate.config.Constant
+import com.f_libs.appupdate.listener.OnButtonClickListener
 import com.f_libs.appupdate.manager.DownloadManager
 import com.f_libs.appupdate.util.ApkUtil
 import com.kiylx.tools.compose_ui.component.ConfirmButton
 import com.kiylx.tools.compose_ui.component.DismissButton
 import com.kiylx.tools.compose_ui.component.SealDialog
 import com.kiylx.tools.compose_ui.icons.SystemUpdate
+import java.io.File
 
 @Composable
 fun AlertUpdateDialog(
     modifier: Modifier = Modifier,
     context: Context,
     downloadManager: DownloadManager,
+    cacheFile: File? = ApkUtil.findBackDownloadApk(context, downloadManager.config.apkMD5),
     dismiss: () -> Unit,
 ) {
 
@@ -41,9 +42,9 @@ fun AlertUpdateDialog(
         context = context,
         downloadManager = downloadManager,
         dismiss = dismiss,
+        cacheFile = cacheFile,
         content = {
                 config: DownloadManager.DownloadConfig,
-                downloadState: State<DownloadStatus>,
                 downloading: () -> Boolean,
                 startDownload: () -> Unit,
                 cancelDownload: () -> Unit,
@@ -54,7 +55,6 @@ fun AlertUpdateDialog(
                 modifier = modifier,
                 config = config,
                 dismiss = dismiss,
-                downloadState = downloadState,
                 downloading = downloading,
                 startDownload = startDownload,
                 cancelDownload = cancelDownload,
@@ -72,7 +72,6 @@ private fun SampleUpdateDialog(
     modifier: Modifier,
     config: DownloadManager.DownloadConfig,
     dismiss: () -> Unit,
-    downloadState: State<DownloadStatus>,
     downloading: () -> Boolean,
     startDownload: () -> Unit,
     cancelDownload: () -> Unit,
@@ -114,9 +113,12 @@ private fun SampleUpdateDialog(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .align(Alignment.Start)
             )
-            Column(modifier = Modifier.fillMaxWidth()
-                .heightIn(max = 160.dp)
-                .verticalScroll(rememberScrollState())) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 160.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
                 Text(
                     text = config.apkDescription.replace("\\n", "\n"),
                     style = MaterialTheme.typography.bodyMedium,
@@ -125,10 +127,7 @@ private fun SampleUpdateDialog(
                         .align(Alignment.Start)
                 )
             }
-            if (
-                downloadState.value is DownloadStatus.Downloading
-                || downloadState.value is DownloadStatus.Start
-            ) {
+            if (buttonState.action == Action.downloading) {
                 LinearProgressIndicator(
                     progress = { progressValue },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
@@ -138,6 +137,7 @@ private fun SampleUpdateDialog(
         },
         dismissButton = {
             DismissButton {
+                config.onButtonClickListener?.onButtonClick(OnButtonClickListener.CANCEL)
                 cancelDownload()
                 dismiss()
             }
@@ -146,17 +146,19 @@ private fun SampleUpdateDialog(
             ConfirmButton(
                 text = stringResource(id = buttonState.stringId), enabled = buttonState.enable
             ) {
-                if (downloadState.value is DownloadStatus.Done) {
+                if (buttonState.file != null && buttonState.action == Action.readyInstall) {
+                    config.onButtonClickListener?.onButtonClick(OnButtonClickListener.UPDATE)
                     //安装
                     if (!config.jumpInstallPage) {
                         ApkUtil.installApk(
                             context,
                             Constant.AUTHORITIES!!,
-                            (downloadState.value as DownloadStatus.Done).apk
+                            buttonState.file
                         )
                     }
                 } else {
                     //执行下载
+                    config.onButtonClickListener?.onButtonClick(OnButtonClickListener.DOWNLOAD)
                     if (!downloading()) {
                         startDownload()
                     }

@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.Flow
  * @author azhon
  */
 
-abstract class BaseHttpDownloadManager {
+abstract class BaseHttpDownloadManager(var path: String) {
     /**
      * download apk from apkUrl
      *

@@ -23,7 +23,6 @@ import java.io.File
 
 /**
  * @author KnightWood
- *
  */
 class Action {
     companion object {
@@ -38,17 +37,18 @@ class Action {
 }
 
 /**
- * @author KnightWood
  * @property vm BaseUpdateDialogViewModel
  * @property mView View
  * @property views SparseArray<View>
  * @property manager DownloadManager
+ * @author KnightWood
  */
 open class BaseUpdateDialogFragment : DialogFragment(), OnDownloadListener {
     lateinit var vm: BaseUpdateDialogViewModel
     lateinit var mView: View
     val views: SparseArray<View> = SparseArray()
     val manager: DownloadManager = DownloadManager.getInstance()
+    var cacheFile: File? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -64,6 +64,11 @@ open class BaseUpdateDialogFragment : DialogFragment(), OnDownloadListener {
         //如果正在下载，更新一下界面状态
         if (manager.downloading) {
             start()
+        }
+        if (cacheFile != null) {
+            vm.apkFile = cacheFile
+            cacheFile = null
+            vm.stateLivedata.value = Action.readyInstall
         }
     }
 
@@ -96,7 +101,7 @@ open class BaseUpdateDialogFragment : DialogFragment(), OnDownloadListener {
                         updateButtonLivedata.postValue(
                             ButtonState(
                                 enable = true,
-                                stringId =com.f_libs.appupdate.R.string.app_update_download_error
+                                stringId = com.f_libs.appupdate.R.string.app_update_download_error
                             )
                         )
                     }
@@ -126,21 +131,22 @@ open class BaseUpdateDialogFragment : DialogFragment(), OnDownloadListener {
         tvDescription().text = manager.config.apkDescription.replace("\\n", "\n")
         //size
         tvSize().apply {
-            if (manager.config.apkSize.isNotEmpty()){
-                visibility=View.VISIBLE
+            if (manager.config.apkSize.isNotEmpty()) {
+                visibility = View.VISIBLE
                 text = String.format(
                     getString(R.string.update_size_tv), manager.config.apkSize
                 )
-            }else{
-                visibility=View.INVISIBLE
+            } else {
+                visibility = View.INVISIBLE
             }
         }
         //update button
         btnUpdate().setOnClickListener {
-            manager.config.onButtonClickListener?.onButtonClick(OnButtonClickListener.UPDATE)
             if (vm.stateLivedata.value == Action.readyInstall) {
+                manager.config.onButtonClickListener?.onButtonClick(OnButtonClickListener.UPDATE)
                 vm.installApk(this.requireContext())
             } else {
+                manager.config.onButtonClickListener?.onButtonClick(OnButtonClickListener.DOWNLOAD)
                 //执行下载
                 manager.directDownload()
             }
@@ -170,6 +176,17 @@ open class BaseUpdateDialogFragment : DialogFragment(), OnDownloadListener {
             progress = 0
         }
     }
+
+
+    /**
+     * 当存在缓存文件时，将不在下载，而是直接安装
+     */
+    fun setCacheFile(cacheFilePath: String?) {
+        cacheFilePath?.let {
+            cacheFile = File(it)
+        }
+    }
+
 
     open fun setProgress(progressValue: Int) {
         (progressBar() as ProgressBar).progress = progressValue
@@ -235,10 +252,10 @@ open class BaseUpdateDialogFragment : DialogFragment(), OnDownloadListener {
 }
 
 /**
- * @author KnightWood
+ * @constructor
  * @property progress Int
  * @property visibility Int
- * @constructor
+ * @author KnightWood
  */
 data class ProgressState(
     val progress: Int = 0,
@@ -246,11 +263,11 @@ data class ProgressState(
 ) : java.io.Serializable
 
 /**
- * @author KnightWood
+ * @constructor
  * @property enable Boolean
  * @property visibility Int
  * @property stringId Int
- * @constructor
+ * @author KnightWood
  */
 data class ButtonState(
     val enable: Boolean = true,
@@ -259,10 +276,10 @@ data class ButtonState(
 ) : java.io.Serializable
 
 /**
- * @author KnightWood
  * @property apkFile File?
  * @property updateButtonLivedata MutableLiveData<ButtonState>
  * @property stateLivedata MutableLiveData<Int>
+ * @author KnightWood
  */
 class BaseUpdateDialogViewModel : ViewModel() {
     var apkFile: File? = null
@@ -285,9 +302,7 @@ class BaseUpdateDialogViewModel : ViewModel() {
     }
 
     /**
-     * when download finish,
-     * update button state changed,
-     * state changed
+     * when download finish, update button state changed, state changed
      */
     fun downloadFinish(apk: File) {
         apkFile = apk

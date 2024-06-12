@@ -30,7 +30,6 @@ class CustomType {
 }
 
 /**
- * @author KnightWood
  * @property url String
  * @property apkName String
  * @property manager DownloadManager?
@@ -39,6 +38,7 @@ class CustomType {
  * @property viewStyle Int
  * @property customType Int
  * @property listenerAdapter OnDownloadListenerAdapter
+ * @author KnightWood
  */
 class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickListener {
 
@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
 
     private val url = "http://s.duapps.com/apks/own/ESFileExplorer-cn.apk"
     private val apkName = "appupdate.apk"
-    private var manager: DownloadManager? = null
+    private lateinit var manager: DownloadManager
     private lateinit var tvPercent: TextView
     private lateinit var progressBar: ProgressBar
     private var viewStyle = com.kiylx.tools.view_ui.UpdateDialogType.Colorful
@@ -82,12 +82,10 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
         findViewById<RadioGroup>(R.id.radio_group2).setOnCheckedChangeListener { group, checkedId ->
             when (checkedId) {
                 R.id.pixel -> {
-                    viewStyle = com.kiylx.tools.view_ui.UpdateDialogType.None
                     customType = CustomType.Pixel
                 }
 
                 R.id.win -> {
-                    viewStyle = com.kiylx.tools.view_ui.UpdateDialogType.None
                     customType = CustomType.Win8
                 }
             }
@@ -147,7 +145,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
             forcedUpgrade = false
             onButtonClickListener = this@MainActivity
         }
-        manager!!.registerDownloadListener(listenerAdapter)
+        manager.registerDownloadListener(listenerAdapter)
         if (customType == CustomType.Pixel) {
             PixelUpdateDialogFragment.open(this)
         } else {
@@ -181,7 +179,6 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
 
     /**
      * 也可以使用builder方式创建
-     *
      */
     private fun startUpdate2_1() {
         val downloadManager = DownloadManager.Builder(this)
@@ -199,7 +196,6 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
 
     /**
      * 使用内置的视图展示下载
-     *
      */
     private fun startUpdate3() {
         manager = DownloadManager.config(application) {
@@ -210,7 +206,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
             apkVersionName = "v4.2.1"
             apkSize = "7.7MB"
             apkDescription = getString(R.string.dialog_msg)
-//            apkMD5="DC501F04BBAA458C9DC33008EFED5E7F"
+            apkMD5="DC501F04BBAA458C9DC33008EFED5E7F"
 
             enableLog(true)
 //            httpManager()
@@ -227,8 +223,16 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
             forcedUpgrade = false
             onButtonClickListener = this@MainActivity
         }
-        manager!!.registerDownloadListener(listenerAdapter)
-        showDownloadDialog(manager!!, updateDialogType = viewStyle)
+        manager.registerButtonListener(object : OnButtonClickListener {
+            override fun onButtonClick(action: Int) {
+                Log.d(TAG, "onButtonClick: $action")
+                if (action == OnButtonClickListener.CANCEL && !manager.downloading) {
+                    manager.directDownload(true)//client download
+                }
+            }
+        })
+        manager.registerDownloadListener(listenerAdapter)
+        showDownloadDialog(manager, updateDialogType = viewStyle)
     }
 
     private fun resetPb() {
@@ -247,7 +251,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener, OnButtonClickLis
     }
 
 
-    override fun onButtonClick(id: Int) {
-        Log.e(TAG, "onButtonClick: $id")
+    override fun onButtonClick(action: Int) {
+        Log.e(TAG, "onButtonClick: $action")
     }
 }

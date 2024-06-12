@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.flow
  * @author   azhon
  */
 
-class MyDownload : BaseHttpDownloadManager() {
+class MyDownload(path:String) : BaseHttpDownloadManager(path) {
 
 
     override fun download(

@@ -30,6 +30,16 @@
         <item name="buttonBarNegativeButtonStyle">@style/Alert.Button.Negative</item>
     </style>
 
+    <style name="MyAlertTheme" parent="ThemeOverlay.Material3.MaterialAlertDialog.Centered">
+        <item name="buttonBarPositiveButtonStyle">@style/Alert.Button.Positive</item>
+        <item name="buttonBarNegativeButtonStyle">@style/Alert.Button.Negative</item>
+        <item name="materialAlertDialogTitleTextStyle">@style/AlertTitle</item>
+    </style>
+
+    <style name="AlertTitle" parent="MaterialAlertDialog.Material3.Title.Text.CenterStacked">
+        <item name="android:textAppearance">@style/TextAppearance.Material3.HeadlineSmall</item>
+    </style>
+
     <style name="Alert.Button.Positive" parent="Widget.Material3.Button">
     </style>
 
