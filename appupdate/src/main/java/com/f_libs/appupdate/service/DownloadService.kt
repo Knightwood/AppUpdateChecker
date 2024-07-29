@@ -269,6 +269,8 @@ class DownloadService : Service() {
         ) {
             LogUtil.e(TAG, "Apk downloaded but md5 is wrong, delete it!")
             apk.delete()
+            val errStatus = DownloadStatus.Error(IllegalStateException("md5 error"))
+            downloadError(errStatus, false)
             return
         }
         if (isBackDownload) {
@@ -303,9 +305,12 @@ class DownloadService : Service() {
         clearState()
     }
 
-    private suspend fun downloadError(status: DownloadStatus.Error) {
+    private suspend fun downloadError(
+        status: DownloadStatus.Error,
+        continueDownload: Boolean = true,
+    ) {
         LogUtil.e(TAG, "download error: ${status.e}")
-        if (config.showNotification && !isBackDownload) {
+        if (config.showNotification && !isBackDownload && continueDownload) {
             NotificationUtil.showErrorNotification(
                 this@DownloadService, config.smallIcon,
                 resources.getString(R.string.app_update_download_error),

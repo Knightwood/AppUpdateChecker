@@ -13,6 +13,7 @@ import com.f_libs.appupdate.listener.OnButtonClickListener
 import com.f_libs.appupdate.listener.OnDownloadListener
 import com.f_libs.appupdate.manager.DownloadManager
 import com.f_libs.appupdate.util.ApkUtil
+import com.f_libs.appupdate.util.ToastUtils
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.kiylx.tools.view_ui.databinding.ItemUpdateDialogBinding
@@ -121,7 +122,10 @@ class SimpleUpdateDialog {
                         positiveButton.setText(R.string.install)
                     }
                     mOnDownloadListener = object : OnDownloadListener {
-                        override fun cancel() {}
+                        override fun cancel() {
+                            ToastUtils.showShot(activity.applicationContext, "下载取消")
+                            dismiss()
+                        }
 
                         override fun done(apk: File) {
                             if (!manager.config.jumpInstallPage) {
@@ -141,6 +145,8 @@ class SimpleUpdateDialog {
                         }
 
                         override fun error(e: Throwable) {
+                            ToastUtils.showShot(activity.applicationContext, "下载失败 ${e.message}")
+                            dismiss()
                             Log.e(TAG, "error: 下载错误", e)
                         }
 

@@ -215,9 +215,12 @@ open class BaseUpdateDialogFragment : DialogFragment(), OnDownloadListener {
         super.onSaveInstanceState(outState)
     }
 
-    override fun cancel() {}
+    override fun cancel() {
+        ToastUtils.showShot(requireActivity().applicationContext, "下载取消")
+    }
 
     override fun error(e: Throwable) {
+        ToastUtils.showShot(requireActivity().applicationContext, "下载失败 ${e.message}")
         Log.e(TAG, "error:", e)
         vm.stateLivedata.postValue(Action.error)
     }
