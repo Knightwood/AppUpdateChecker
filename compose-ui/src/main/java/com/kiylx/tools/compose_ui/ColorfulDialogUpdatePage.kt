@@ -2,29 +2,12 @@ package com.kiylx.tools.compose_ui
 
 import android.content.Context
 import android.util.Log
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredHeight
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,10 +16,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.f_libs.appupdate.config.Constant
-import com.f_libs.appupdate.listener.OnButtonClickListener
-import com.f_libs.appupdate.manager.DownloadManager
-import com.f_libs.appupdate.util.ApkUtil
+import com.github.knightwood.appupdate.core.config.Constant
+import com.github.knightwood.appupdate.core.listener.OnButtonClickListener
+import com.github.knightwood.appupdate.core.manager.DownloadManager
+import com.github.knightwood.appupdate.core.util.ApkUtil
 import com.kiylx.tools.compose_ui.component.ConfirmButton
 import com.kiylx.tools.compose_ui.component.FreeSealDialog
 import java.io.File
@@ -169,11 +152,11 @@ private fun SampleUpdateDialog(
                             )
                         }
                         confirmButton(
-                            modifier = Modifier
+                            Modifier
                                 .fillMaxWidth(0.7f)
                                 .padding(vertical = 12.dp),
-                            text = stringResource(id = buttonState.stringId),
-                            enabled = buttonState.enable
+                            stringResource(id = buttonState.stringId),
+                            buttonState.enable
                         ) {
                             if (buttonState.file != null && buttonState.action == Action.readyInstall
                             ) {

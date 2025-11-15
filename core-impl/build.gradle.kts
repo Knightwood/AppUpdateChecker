@@ -1,18 +1,21 @@
 plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.library)
-    alias (libs.plugins.compose.compiler)
+    alias(libs.plugins.vanniktech.mavenPublish)
     id("publish")
 }
 
 android {
-    namespace = "com.kiylx.tools.compose_ui"
     compileSdk = 36
+    namespace = "com.github.knightwood.appupdate.core"
 
     defaultConfig {
-        minSdk = 24
-
+        minSdk = 16
         consumerProguardFiles("consumer-rules.pro")
+    }
+
+    buildFeatures {
+        viewBinding = true
     }
 
     buildTypes {
@@ -24,10 +27,6 @@ android {
             )
         }
     }
-    buildFeatures {
-        compose = true
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
@@ -38,17 +37,11 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.constraintLayout)
     implementation(libs.androidx.appCompat)
+    implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlin.coroutines.core)
+    implementation(libs.kotlin.coroutines.android)
     implementation(libs.google.material)
-
-    val bom = libs.versions.bom.get()
-
-    // Import the Compose BOM
-    implementation(platform("androidx.compose:compose-bom:${bom}"))
-    implementation("androidx.compose.material:material-icons-core")
-    implementation("androidx.compose.material3:material3")
-
-    compileOnly(project(":core-impl"))
-
 }

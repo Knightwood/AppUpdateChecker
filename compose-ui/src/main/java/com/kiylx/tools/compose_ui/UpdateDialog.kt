@@ -10,9 +10,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.f_libs.appupdate.base.bean.DownloadStatus
-import com.f_libs.appupdate.manager.DownloadManager
-import com.f_libs.appupdate.util.ApkUtil
+import com.github.knightwood.appupdate.core.base.bean.DownloadStatus
+import com.github.knightwood.appupdate.core.manager.DownloadManager
+import com.github.knightwood.appupdate.core.util.ApkUtil
 import java.io.File
 
 private val TAG = "Update1"
@@ -80,7 +80,7 @@ fun BasicUpdateDialog(
                 is DownloadStatus.Error -> {
                     buttonState = ButtonState(
                         enable = false,
-                        stringId = com.f_libs.appupdate.R.string.app_update_download_error,
+                        stringId = com.github.knightwood.appupdate.core.R.string.app_update_download_error,
                         action = Action.error,
                         file = null
                     )

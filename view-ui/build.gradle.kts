@@ -1,12 +1,12 @@
 plugins {
-    id("com.android.library")
-    id("org.jetbrains.kotlin.android")
-    id("maven-publish")
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.library)
+    id("publish")
 }
 
 android {
     namespace = "com.kiylx.tools.view_ui"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24
@@ -33,51 +33,11 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
-    publishing {
-        singleVariant("release") {
-            withSourcesJar()
-            withJavadocJar()
-        }
-    }
 }
 
 dependencies {
-
-    implementation("androidx.core:core-ktx:1.10.1")
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.9.0")
-    compileOnly(project(":appupdate"))
-}
-
-afterEvaluate {
-    publishing {
-        publications {
-            create<MavenPublication>("release") {
-                groupId = "com.github.knightwood"
-                artifactId = "appupdatechecker-view-ui"
-                version = rootProject.ext["version"].toString()
-                afterEvaluate {
-                    from(components["release"])
-                }
-                pom {
-                    name.set("AppUpdateChecker-View-UI")
-                    description.set("A library for checking app updates, with a user-friendly UI.")
-                    url.set("https://github.com/knightwood/AppUpdateChecker")
-                    licenses {
-                        license {
-                            name.set("Apache License, Version 2.0 ")
-                            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
-                        }
-                    }
-                    developers {
-                        developer {
-                            name.set("knightwood")
-                        }
-                    }
-                }
-            }
-
-
-        }
-    }
+    implementation(libs.androidx.appCompat)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.google.material)
+    compileOnly(project(":core-impl"))
 }

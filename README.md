@@ -1,3 +1,12 @@
+```
+com.github.knightwood.appupdate:core-impl:1.3.4
+com.github.knightwood.appupdate:view-ui:1.3.4
+com.github.knightwood.appupdate:compose-ui:1.3.4
+
+```
+
+
+
 <p align="center">
   <img src="https://img.shields.io/badge/miniSdk-16%2B-blue.svg">
   <img src="https://img.shields.io/badge/license-Apache2.0-orange.svg">

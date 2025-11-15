@@ -9,7 +9,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentTransaction
-import com.f_libs.appupdate.util.DensityUtil
+import com.github.knightwood.appupdate.core.util.DensityUtil
 
 open class DefaultUpdateDialogFragment : BaseUpdateDialogFragment() {
 

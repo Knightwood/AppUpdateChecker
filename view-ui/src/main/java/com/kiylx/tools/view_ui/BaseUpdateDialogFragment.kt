@@ -13,12 +13,12 @@ import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.f_libs.appupdate.config.Constant
-import com.f_libs.appupdate.listener.OnButtonClickListener
-import com.f_libs.appupdate.listener.OnDownloadListener
-import com.f_libs.appupdate.manager.DownloadManager
-import com.f_libs.appupdate.util.ApkUtil
-import com.f_libs.appupdate.util.ToastUtils
+import com.github.knightwood.appupdate.core.config.Constant
+import com.github.knightwood.appupdate.core.listener.OnButtonClickListener
+import com.github.knightwood.appupdate.core.listener.OnDownloadListener
+import com.github.knightwood.appupdate.core.manager.DownloadManager
+import com.github.knightwood.appupdate.core.util.ApkUtil
+import com.github.knightwood.appupdate.core.util.ToastUtils
 import java.io.File
 
 /**
@@ -87,7 +87,7 @@ open class BaseUpdateDialogFragment : DialogFragment(), OnDownloadListener {
                     Action.downloading -> {
                         vm.updateButtonLivedata.value = ButtonState(
                             enable = false,
-                            stringId = com.f_libs.appupdate.R.string.app_update_start_downloading
+                            stringId = com.github.knightwood.appupdate.core.R.string.app_update_start_downloading
                         )
                     }
 
@@ -101,7 +101,7 @@ open class BaseUpdateDialogFragment : DialogFragment(), OnDownloadListener {
                         updateButtonLivedata.postValue(
                             ButtonState(
                                 enable = true,
-                                stringId = com.f_libs.appupdate.R.string.app_update_download_error
+                                stringId = com.github.knightwood.appupdate.core.R.string.app_update_download_error
                             )
                         )
                     }

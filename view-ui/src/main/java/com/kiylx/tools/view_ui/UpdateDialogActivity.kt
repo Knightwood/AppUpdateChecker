@@ -16,14 +16,14 @@ import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import com.f_libs.appupdate.config.Constant
-import com.f_libs.appupdate.listener.OnButtonClickListener
-import com.f_libs.appupdate.listener.OnDownloadListenerAdapter
-import com.f_libs.appupdate.manager.DownloadManager
-import com.f_libs.appupdate.service.DownloadService
-import com.f_libs.appupdate.util.ApkUtil
-import com.f_libs.appupdate.util.DensityUtil
-import com.f_libs.appupdate.util.LogUtil
+import com.github.knightwood.appupdate.core.config.Constant
+import com.github.knightwood.appupdate.core.listener.OnButtonClickListener
+import com.github.knightwood.appupdate.core.listener.OnDownloadListenerAdapter
+import com.github.knightwood.appupdate.core.manager.DownloadManager
+import com.github.knightwood.appupdate.core.service.DownloadService
+import com.github.knightwood.appupdate.core.util.ApkUtil
+import com.github.knightwood.appupdate.core.util.DensityUtil
+import com.github.knightwood.appupdate.core.util.LogUtil
 import java.io.File
 
 
@@ -86,7 +86,7 @@ class UpdateDialogActivity : AppCompatActivity(), View.OnClickListener {
         if (manager.downloading) {
             manager.config.onDownloadListeners.add(listenerAdapter)
             btnUpdate.isEnabled = false
-            btnUpdate.text = resources.getString(com.f_libs.appupdate.R.string.app_update_background_downloading)
+            btnUpdate.text = resources.getString(com.github.knightwood.appupdate.core.R.string.app_update_background_downloading)
         }
     }
 
@@ -206,7 +206,7 @@ class UpdateDialogActivity : AppCompatActivity(), View.OnClickListener {
     private fun startUpdate() {
         if (manager?.config?.forcedUpgrade == true) {
             btnUpdate.isEnabled = false
-            btnUpdate.text = resources.getString(com.f_libs.appupdate.R.string.app_update_background_downloading)
+            btnUpdate.text = resources.getString(com.github.knightwood.appupdate.core.R.string.app_update_background_downloading)
         } else {
             finish()
         }
@@ -228,7 +228,7 @@ class UpdateDialogActivity : AppCompatActivity(), View.OnClickListener {
     private val listenerAdapter: OnDownloadListenerAdapter = object : OnDownloadListenerAdapter() {
         override fun start() {
             btnUpdate.isEnabled = false
-            btnUpdate.text = resources.getString(com.f_libs.appupdate.R.string.app_update_background_downloading)
+            btnUpdate.text = resources.getString(com.github.knightwood.appupdate.core.R.string.app_update_background_downloading)
         }
 
         override fun downloading(max: Int, progress: Int) {
@@ -244,13 +244,13 @@ class UpdateDialogActivity : AppCompatActivity(), View.OnClickListener {
             this@UpdateDialogActivity.apk = apk
             btnUpdate.tag = install
             btnUpdate.isEnabled = true
-            btnUpdate.text = resources.getString(com.f_libs.appupdate.R.string.app_update_click_hint)
+            btnUpdate.text = resources.getString(com.github.knightwood.appupdate.core.R.string.app_update_click_hint)
         }
 
         override fun error(e: Throwable) {
             btnUpdate.tag = error
             btnUpdate.isEnabled = true
-            btnUpdate.text = resources.getString(com.f_libs.appupdate.R.string.app_update_continue_downloading)
+            btnUpdate.text = resources.getString(com.github.knightwood.appupdate.core.R.string.app_update_continue_downloading)
         }
     }
 

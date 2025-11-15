@@ -1,7 +1,7 @@
 package com.azhon.app
 
-import com.f_libs.appupdate.base.BaseHttpDownloadManager
-import com.f_libs.appupdate.base.bean.DownloadStatus
+import com.github.knightwood.appupdate.core.base.BaseHttpDownloadManager
+import com.github.knightwood.appupdate.core.base.bean.DownloadStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 

@@ -17,8 +17,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.azhon.app.R
 import com.azhon.app.compose.ui.theme.AppUpdateTheme
-import com.f_libs.appupdate.listener.OnButtonClickListener
-import com.f_libs.appupdate.manager.DownloadManager
+import com.github.knightwood.appupdate.core.listener.OnButtonClickListener
+import com.github.knightwood.appupdate.core.manager.DownloadManager
 import com.kiylx.tools.compose_ui.AlertUpdateDialog
 import com.kiylx.tools.compose_ui.ColorfulUpdateDialog
 import com.kiylx.tools.compose_ui.component.ConfirmButton

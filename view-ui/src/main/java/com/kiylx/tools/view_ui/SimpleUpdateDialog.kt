@@ -8,12 +8,13 @@ import android.view.Window
 import android.widget.Button
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.drawable.DrawableCompat
-import com.f_libs.appupdate.config.Constant
-import com.f_libs.appupdate.listener.OnButtonClickListener
-import com.f_libs.appupdate.listener.OnDownloadListener
-import com.f_libs.appupdate.manager.DownloadManager
-import com.f_libs.appupdate.util.ApkUtil
-import com.f_libs.appupdate.util.ToastUtils
+import com.github.knightwood.appupdate.core.config.Constant
+import com.github.knightwood.appupdate.core.listener.OnButtonClickListener
+import com.github.knightwood.appupdate.core.listener.OnDownloadListener
+import com.github.knightwood.appupdate.core.manager.DownloadManager
+import com.github.knightwood.appupdate.core.util.ApkUtil
+import com.github.knightwood.appupdate.core.util.NotifyPermissionUtils
+import com.github.knightwood.appupdate.core.util.ToastUtils
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.kiylx.tools.view_ui.databinding.ItemUpdateDialogBinding
@@ -113,6 +114,7 @@ class SimpleUpdateDialog {
 //                    textSize = 24f
 //                }
                 getButton(AlertDialog.BUTTON_POSITIVE).also { positiveButton ->
+                    NotifyPermissionUtils.check(activity)
                     if (manager.downloading) {
                         showProgressUi(positiveButton)
                     }
