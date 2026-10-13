@@ -1,5 +1,6 @@
 package com.github.knightwood.appupdate.core.base.bean
 
+import okio.Path
 import java.io.File
 
 
@@ -19,9 +20,11 @@ sealed class DownloadStatus {
 
     data object Start : DownloadStatus()
 
-    data class Downloading(val max: Int, val progress: Int) : DownloadStatus()
+    data class Downloading(val max: Int, val progress: Long) : DownloadStatus()
 
-    data class Done(val apk: File) : DownloadStatus()
+    data object Paused : DownloadStatus()
+
+    data class Done(val apk: Path) : DownloadStatus()
 
     data object Cancel : DownloadStatus()
 

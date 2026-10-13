@@ -16,6 +16,7 @@ androidx_preference = "1.2.0"
 androidx-recyclerview = "1.3.2"
 coroutines = "1.10.1"
 activity_compose_version = "1.11.0"
+okio = "3.10.2"
 
 [libraries]
 # AndroidX核心库
@@ -33,6 +34,7 @@ kotlin-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-co
 kotlin-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlin-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.8.1" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity_compose_version" }
+okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 
 [plugins]
 # application和library插件

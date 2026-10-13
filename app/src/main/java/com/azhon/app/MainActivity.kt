@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener,
     }
 
 //    private val url = "http://s.duapps.com/apks/own/ESFileExplorer-cn.apk"
-    private val url = "http://192.168.0.139:9167/jiliang/img/savedfiles/apk_files/app-master-release.apk"
+    private val url = "http://192.168.5.117:9167/jiliang/img/apk_files/app-master-release.apk"
     private val apkName = "appupdate.apk"
     private lateinit var manager: DownloadManager
     private lateinit var tvPercent: TextView

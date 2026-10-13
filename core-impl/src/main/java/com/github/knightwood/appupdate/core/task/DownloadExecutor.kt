@@ -1,6 +1,5 @@
-package com.github.knightwood.appupdate.core.manager
+package com.github.knightwood.appupdate.core.task
 
-import com.github.knightwood.appupdate.core.base.BaseHttpDownloadManager
 import com.github.knightwood.appupdate.core.base.bean.DownloadStatus
 import com.github.knightwood.appupdate.core.config.Constant
 import com.github.knightwood.appupdate.core.util.LogUtil
@@ -10,8 +9,9 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import java.io.File
-import java.io.FileOutputStream
+import okio.Buffer
+import okio.buffer
+import okio.source
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
@@ -23,40 +23,25 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 
-/**
- * ProjectName: AppUpdate
- * PackageName: com.azhon.appupdate.manager
- * FileName:    HttpDownloadManager
- * CreateDate:  2022/4/7 on 14:29
- * Desc:
- *
- * @author   azhon
- */
-
-@Suppress("BlockingMethodInNonBlockingContext")
-class HttpDownloadManager(path: String) : BaseHttpDownloadManager(path) {
-    companion object {
-        private const val TAG = "HttpDownloadManager"
-    }
-
+class DownloadExecutor : IDownloadExecutor {
+    private val TAG = "HttpDownloadManager"
     private var shutdown: Boolean = false
 
-    override fun download(apkUrl: String, apkName: String): Flow<DownloadStatus> {
+    override fun download(fileStorage: FileStorage, apkUrl: String): Flow<DownloadStatus> {
         trustAllHosts()
         shutdown = false
-        File(path, apkName).let {
-            if (it.exists()) it.delete()
-        }
         return flow {
             emit(DownloadStatus.Start)
-            connectToDownload(apkUrl, apkName, this)
+            saveDownloadData(fileStorage, apkUrl, this)
         }.catch {
             emit(DownloadStatus.Error(it))
         }.flowOn(Dispatchers.IO)
     }
 
-    private suspend fun connectToDownload(
-        apkUrl: String, apkName: String, flow: FlowCollector<DownloadStatus>
+    private suspend fun saveDownloadData(
+        fileStorage: FileStorage,
+        apkUrl: String,
+        flow: FlowCollector<DownloadStatus>,
     ) {
         val con = URL(apkUrl).openConnection() as HttpURLConnection
         con.apply {
@@ -68,28 +53,25 @@ class HttpDownloadManager(path: String) : BaseHttpDownloadManager(path) {
         if (con.responseCode == HttpURLConnection.HTTP_OK) {
             val inStream = con.inputStream
             val length = con.contentLength
-            var len: Int
-            var progress = 0
-            val buffer = ByteArray(1024 * 2)
-            // 检查文件夹是否存在
-            val dir = File(path)
-            if (!dir.exists()){
-                dir.mkdirs()
-            }
-            val file = File(path, apkName)//目标文件
-            FileOutputStream(file).use { out ->
-                while (inStream.read(buffer).also { len = it } != -1 && !shutdown) {
-                    out.write(buffer, 0, len)
-                    progress += len
-                    flow.emit(DownloadStatus.Downloading(length, progress))
+            var len: Long
+            var progress = 0L
+            val buffer = Buffer()
+            fileStorage.use {
+                inStream.source().buffer().use { source ->
+                    while (
+                        source.read(buffer, 2048L).also { len = it } != -1L && !shutdown
+                    ) {
+                        it.write(buffer, len)
+                        progress += len
+                        flow.emit(DownloadStatus.Downloading(length, progress))
+                    }
                 }
-                out.flush()
             }
-            inStream.close()
             if (shutdown) {
                 flow.emit(DownloadStatus.Cancel)
+                fileStorage.delete()
             } else {
-                flow.emit(DownloadStatus.Done(file))
+                flow.emit(DownloadStatus.Done(fileStorage.path()))
             }
         } else if (con.responseCode == HttpURLConnection.HTTP_MOVED_PERM
             || con.responseCode == HttpURLConnection.HTTP_MOVED_TEMP
@@ -100,7 +82,7 @@ class HttpDownloadManager(path: String) : BaseHttpDownloadManager(path) {
                 TAG,
                 "The current url is the redirect Url, the redirected url is $locationUrl"
             )
-            connectToDownload(locationUrl, apkName, flow)
+            saveDownloadData(fileStorage, locationUrl, flow)
         } else {
             val e = SocketTimeoutException("Error: Http response code = ${con.responseCode}")
             flow.emit(DownloadStatus.Error(e))
@@ -118,11 +100,11 @@ class HttpDownloadManager(path: String) : BaseHttpDownloadManager(path) {
             }
 
             override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-                LogUtil.d(TAG, "checkClientTrusted")
+                LogUtil.Companion.d(TAG, "checkClientTrusted")
             }
 
             override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-                LogUtil.d(TAG, "checkServerTrusted")
+                LogUtil.Companion.d(TAG, "checkServerTrusted")
             }
         }
         try {
@@ -130,7 +112,7 @@ class HttpDownloadManager(path: String) : BaseHttpDownloadManager(path) {
             sslContext.init(null, arrayOf(manager), SecureRandom())
             HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.socketFactory)
         } catch (e: Exception) {
-            LogUtil.e(TAG, "trustAllHosts error: $e")
+            LogUtil.Companion.e(TAG, "trustAllHosts error: $e")
         }
     }
 

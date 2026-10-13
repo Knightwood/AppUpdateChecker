@@ -5,12 +5,13 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.util.Log
 import androidx.annotation.LayoutRes
-import com.github.knightwood.appupdate.core.base.BaseHttpDownloadManager
 import com.github.knightwood.appupdate.core.base.bean.DownloadStatus
 import com.github.knightwood.appupdate.core.config.Constant
 import com.github.knightwood.appupdate.core.listener.OnButtonClickListener
 import com.github.knightwood.appupdate.core.listener.OnDownloadListener
 import com.github.knightwood.appupdate.core.service.DownloadService
+import com.github.knightwood.appupdate.core.task.IDownloadExecutor
+import com.github.knightwood.appupdate.core.task.DownloadExecutor
 import com.github.knightwood.appupdate.core.util.ApkUtil
 import com.github.knightwood.appupdate.core.util.LogUtil
 import com.github.knightwood.appupdate.core.util.NotNullSingleVar
@@ -23,8 +24,15 @@ import kotlinx.coroutines.flow.map
  * @author KnightWood
  */
 class DownloadManager private constructor(
-    var config: DownloadConfig, val application: Application
+    var config: DownloadConfig,
+    val application: Application,
 ) {
+
+    /**
+     * 下载状态流
+     */
+    var downloadStateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow(DownloadStatus.IDLE)
+
     /**
      * 是否正在下载
      */
@@ -34,11 +42,6 @@ class DownloadManager private constructor(
      * 是否正在执行静默下载。
      */
     var isBackDownload: Boolean = false
-
-    /**
-     * 下载状态流
-     */
-    var downloadStateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow(DownloadStatus.IDLE)
 
     /**
      * 百分比进度
@@ -272,7 +275,7 @@ class DownloadManager private constructor(
         /**
          * Notification icon resource
          */
-        var smallIcon = -1
+        var smallIcon = ApkUtil.getAppIcon(application)
 
         /**
          * New version description information
@@ -292,7 +295,7 @@ class DownloadManager private constructor(
         /**
          * Apk download manager
          */
-        var httpManager: BaseHttpDownloadManager? by NullableSingleVar()
+        var httpManager: IDownloadExecutor? by NullableSingleVar()
 
         /**
          * The following are unimportant filed
@@ -360,12 +363,12 @@ class DownloadManager private constructor(
             return this
         }
 
-        private fun getOneHttpManager(): BaseHttpDownloadManager {
+        private fun getOneHttpManager(): IDownloadExecutor {
             if (httpManager == null) {
                 synchronized(this) {
                     if (httpManager == null) {
                         try {
-                            httpManager = HttpDownloadManager(downloadPath)
+                            httpManager = DownloadExecutor(downloadPath)
                         } catch (e: Exception) {
                             Log.e(TAG, "getOneHttpManager: 重复赋值", e)
                         }
@@ -494,7 +497,7 @@ class DownloadManager private constructor(
             return this
         }
 
-        fun httpManager(httpManager: BaseHttpDownloadManager): Builder {
+        fun httpManager(httpManager: IDownloadExecutor): Builder {
             config.httpManager = httpManager
             return this
         }

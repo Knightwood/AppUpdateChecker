@@ -1,6 +1,6 @@
 package com.azhon.app
 
-import com.github.knightwood.appupdate.core.base.BaseHttpDownloadManager
+import com.github.knightwood.appupdate.core.base.BaseDownloadTask
 import com.github.knightwood.appupdate.core.base.bean.DownloadStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.flow
  * @author   azhon
  */
 
-class MyDownload(path:String) : BaseHttpDownloadManager(path) {
+class MyDownload(path:String) : BaseDownloadTask(path) {
 
 
     override fun download(
