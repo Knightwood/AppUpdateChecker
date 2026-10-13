@@ -234,8 +234,9 @@ class DownloadService : Service() {
         if (config.showNotification && !isBackDownload) {
             NotificationUtil.showNotification(
                 this@DownloadService, config.smallIcon,
-                resources.getString(R.string.app_update_start_download),
-                resources.getString(R.string.app_update_start_download_hint)
+                ApkUtil.getAppName(this@DownloadService),
+                resources.getString(R.string.app_update_start_download) + "/n" +
+                        resources.getString(R.string.app_update_start_download_hint)
             )
         }
     }
@@ -253,8 +254,9 @@ class DownloadService : Service() {
             if (!isBackDownload) {
                 NotificationUtil.showProgressNotification(
                     this@DownloadService, config.smallIcon,
-                    resources.getString(R.string.app_update_start_downloading),
-                    content, if (max == -1) -1 else 100, curr
+                    ApkUtil.getAppName(this@DownloadService),
+                    resources.getString(R.string.app_update_start_downloading) + "\n" + content,
+                    if (max == -1) -1 else 100, curr
                 )
             }
         }
@@ -282,8 +284,9 @@ class DownloadService : Service() {
             if (config.showNotification || Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 NotificationUtil.showDoneNotification(
                     this@DownloadService, config.smallIcon,
-                    resources.getString(R.string.app_update_download_completed),
-                    resources.getString(R.string.app_update_click_hint),
+                    ApkUtil.getAppName(this@DownloadService),
+                    resources.getString(R.string.app_update_download_completed) + "\n" +
+                            resources.getString(R.string.app_update_click_hint),
                     Constant.AUTHORITIES!!, apk
                 )
             }
@@ -313,8 +316,8 @@ class DownloadService : Service() {
         if (config.showNotification && !isBackDownload && continueDownload) {
             NotificationUtil.showErrorNotification(
                 this@DownloadService, config.smallIcon,
-                resources.getString(R.string.app_update_download_error),
-                resources.getString(R.string.app_update_continue_downloading),
+                ApkUtil.getAppName(this@DownloadService),
+                resources.getString(R.string.app_update_download_error) + "\n" + resources.getString(R.string.app_update_continue_downloading),
             )
         }
         notifyListener(status)

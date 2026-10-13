@@ -77,7 +77,7 @@ class ApkUtil {
         internal fun getFilePath(
             context: Context,
             relativePath: String,
-            check: Boolean = true
+            check: Boolean = true,
         ): String {
             val path = (context.externalCacheDir?.path ?: String.format(
                 Constant.APK_PATH,
@@ -163,6 +163,19 @@ class ApkUtil {
             } else {
                 return packageInfo?.versionCode?.toLong() ?: 1
             }
+        }
+
+        fun getAppIcon(context: Context): Int{
+            val pm = context.packageManager
+            val appInfo = pm.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
+            return appInfo.icon
+        }
+
+        fun getAppName(context: Context): String{
+            val pm = context.packageManager
+            val appInfo = pm.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
+            val appName = appInfo.loadLabel(pm).toString() + ""
+            return appName
         }
     }
 }
