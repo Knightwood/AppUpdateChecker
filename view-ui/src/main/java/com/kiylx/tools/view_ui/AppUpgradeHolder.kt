@@ -4,9 +4,9 @@ import android.app.Activity
 import android.content.Intent
 import android.widget.Toast
 import androidx.fragment.app.FragmentActivity
-import com.github.knightwood.appupdate.core.listener.LifecycleCallbacksAdapter
-import com.github.knightwood.appupdate.core.manager.DownloadManager
-import com.github.knightwood.appupdate.core.util.ApkUtil
+import com.github.knightwood.downloader.core.listener.LifecycleCallbacksAdapter
+import com.github.knightwood.downloader.core.manager.DownloadManager
+import com.github.knightwood.downloader.core.util.ApkUtil
 
 /**
  * @author KnightWood

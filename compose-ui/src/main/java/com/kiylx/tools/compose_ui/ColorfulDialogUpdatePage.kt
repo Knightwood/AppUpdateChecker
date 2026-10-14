@@ -16,10 +16,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.github.knightwood.appupdate.core.config.Constant
-import com.github.knightwood.appupdate.core.listener.OnButtonClickListener
-import com.github.knightwood.appupdate.core.manager.DownloadManager
-import com.github.knightwood.appupdate.core.util.ApkUtil
+import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.listener.OnButtonClickListener
+import com.github.knightwood.downloader.core.manager.DownloadManager
+import com.github.knightwood.downloader.core.util.ApkUtil
 import com.kiylx.tools.compose_ui.component.ConfirmButton
 import com.kiylx.tools.compose_ui.component.FreeSealDialog
 import java.io.File

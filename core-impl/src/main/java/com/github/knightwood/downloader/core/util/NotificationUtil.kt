@@ -1,4 +1,4 @@
-package com.github.knightwood.appupdate.core.util
+package com.github.knightwood.downloader.core.util
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,9 +10,9 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.github.knightwood.appupdate.core.config.Constant
-import com.github.knightwood.appupdate.core.manager.DownloadManager
-import com.github.knightwood.appupdate.core.service.DownloadService
+import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.manager.DownloadManager
+import com.github.knightwood.downloader.core.service.DownloadService
 import java.io.File
 
 /**

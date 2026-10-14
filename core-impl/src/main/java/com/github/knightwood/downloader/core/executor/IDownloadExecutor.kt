@@ -1,6 +1,6 @@
-package com.github.knightwood.appupdate.core.task
+package com.github.knightwood.downloader.core.executor
 
-import com.github.knightwood.appupdate.core.base.bean.DownloadStatus
+import com.github.knightwood.downloader.core.model.TaskState
 import kotlinx.coroutines.flow.Flow
 
 interface IDownloadExecutor {
@@ -8,10 +8,10 @@ interface IDownloadExecutor {
      * download apk from apkUrl
      *
      * @param fileStorage 将下载数据输出到文件存储器
-     * @param apkUrl 下载地址
+     * @param url 下载地址
      * 返回下载状态
      */
-    fun download(fileStorage: FileStorage, apkUrl: String): Flow<DownloadStatus>
+    fun download(fileStorage: FileStorage, url: String): Flow<TaskState>
 
     fun pause() {
         throw NotImplementedError()

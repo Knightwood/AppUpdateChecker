@@ -1,4 +1,4 @@
-package com.github.knightwood.appupdate.core.util
+package com.github.knightwood.downloader.core.util
 
 import android.content.Context
 import android.widget.Toast

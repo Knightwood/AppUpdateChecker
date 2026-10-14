@@ -13,11 +13,11 @@ import androidx.appcompat.app.AppCompatActivity
 import com.azhon.app.compose.ComposeExampleActivity
 import com.azhon.app.example.PixelUpdateDialogFragment
 import com.azhon.app.example.Win8UpdateDialogFragment
-import com.github.knightwood.appupdate.core.listener.OnButtonClickListener
-import com.github.knightwood.appupdate.core.listener.OnDownloadListenerAdapter
-import com.github.knightwood.appupdate.core.manager.DownloadManager
-import com.github.knightwood.appupdate.core.util.ApkUtil
-import com.github.knightwood.appupdate.core.util.ToastUtils
+import com.github.knightwood.downloader.core.listener.OnButtonClickListener
+import com.github.knightwood.downloader.core.listener.OnDownloadListenerAdapter
+import com.github.knightwood.downloader.core.manager.DownloadManager
+import com.github.knightwood.downloader.core.util.ApkUtil
+import com.github.knightwood.downloader.core.util.ToastUtils
 import com.kiylx.tools.view_ui.UpdateDialogType
 import com.kiylx.tools.view_ui.showDownloadDialog
 
@@ -41,7 +41,7 @@ class CustomType {
  * @author KnightWood
  */
 class MainActivity : AppCompatActivity(), View.OnClickListener,
-    com.github.knightwood.appupdate.core.listener.OnButtonClickListener {
+    com.github.knightwood.downloader.core.listener.OnButtonClickListener {
 
     companion object {
         private const val TAG = "MainActivity"

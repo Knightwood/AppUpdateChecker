@@ -1,7 +1,7 @@
 package com.azhon.app
 
-import com.github.knightwood.appupdate.core.base.BaseDownloadTask
-import com.github.knightwood.appupdate.core.base.bean.DownloadStatus
+import com.github.knightwood.downloader.core.base.BaseDownloadTask
+import com.github.knightwood.downloader.core.task.TaskState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -21,7 +21,7 @@ class MyDownload(path:String) : BaseDownloadTask(path) {
 
     override fun download(
         apkUrl: String, apkName: String
-    ): Flow<DownloadStatus> {
+    ): Flow<TaskState> {
         return flow { }
     }
 

@@ -11,7 +11,7 @@
         <service android:name=".service.DownloadService"/>
 
         <provider
-            android:name="com.github.knightwood.appupdate.core.config.AppUpdateFileProvider"
+            android:name="com.github.knightwood.downloader.core.model.AppUpdateFileProvider"
             android:authorities="${applicationId}.fileProvider"
             android:exported="false"
             android:grantUriPermissions="true">

@@ -1,4 +1,4 @@
-package com.github.knightwood.appupdate.core.task
+package com.github.knightwood.downloader.core.executor
 
 import okio.Buffer
 import okio.FileSystem

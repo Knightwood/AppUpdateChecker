@@ -13,12 +13,12 @@ import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.github.knightwood.appupdate.core.config.Constant
-import com.github.knightwood.appupdate.core.listener.OnButtonClickListener
-import com.github.knightwood.appupdate.core.listener.OnDownloadListener
-import com.github.knightwood.appupdate.core.manager.DownloadManager
-import com.github.knightwood.appupdate.core.util.ApkUtil
-import com.github.knightwood.appupdate.core.util.ToastUtils
+import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.listener.OnButtonClickListener
+import com.github.knightwood.downloader.core.listener.OnDownloadListener
+import com.github.knightwood.downloader.core.manager.DownloadManager
+import com.github.knightwood.downloader.core.util.ApkUtil
+import com.github.knightwood.downloader.core.util.ToastUtils
 import java.io.File
 
 /**
@@ -87,7 +87,7 @@ open class BaseUpdateDialogFragment : DialogFragment(), OnDownloadListener {
                     Action.downloading -> {
                         vm.updateButtonLivedata.value = ButtonState(
                             enable = false,
-                            stringId = com.github.knightwood.appupdate.core.R.string.app_update_start_downloading
+                            stringId = com.github.knightwood.downloader.core.R.string.app_update_start_downloading
                         )
                     }
 
@@ -101,7 +101,7 @@ open class BaseUpdateDialogFragment : DialogFragment(), OnDownloadListener {
                         updateButtonLivedata.postValue(
                             ButtonState(
                                 enable = true,
-                                stringId = com.github.knightwood.appupdate.core.R.string.app_update_download_error
+                                stringId = com.github.knightwood.downloader.core.R.string.app_update_download_error
                             )
                         )
                     }

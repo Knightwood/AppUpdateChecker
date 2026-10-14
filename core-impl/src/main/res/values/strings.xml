@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="download_service_foreground_desc">等待文件下载</string>
     <string name="app_update_background_downloading">正在后台下载新版本…</string>
     <string name="app_update_start_download">开始下载</string>
     <string name="app_update_start_download_hint">可稍后查看下载进度</string>

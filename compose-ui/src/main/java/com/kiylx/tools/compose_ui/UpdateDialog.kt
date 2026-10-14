@@ -10,9 +10,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.github.knightwood.appupdate.core.base.bean.DownloadStatus
-import com.github.knightwood.appupdate.core.manager.DownloadManager
-import com.github.knightwood.appupdate.core.util.ApkUtil
+import com.github.knightwood.downloader.core.task.TaskState
+import com.github.knightwood.downloader.core.manager.DownloadManager
+import com.github.knightwood.downloader.core.util.ApkUtil
 import java.io.File
 
 private val TAG = "Update1"
@@ -49,7 +49,7 @@ fun BasicUpdateDialog(
     LaunchedEffect(key1 = Unit, block = {
         downloadManager.downloadStateFlow.collect {
             when (it) {
-                DownloadStatus.Cancel -> {
+                TaskState.DROPPED -> {
                     buttonState = ButtonState(
                         enable = false,
                         stringId = R.string.canceled,
@@ -59,11 +59,11 @@ fun BasicUpdateDialog(
                     dismiss()
                 }
 
-                is DownloadStatus.Done -> {
+                is TaskState.FINISHED -> {
                     if (downloadManager.config.jumpInstallPage) {
                         dismiss()
                     } else {
-                        apk =it.apk
+                        apk =it.path
                         buttonState = ButtonState(
                             enable = true,
                             stringId = R.string.install,
@@ -73,20 +73,20 @@ fun BasicUpdateDialog(
                     }
                 }
 
-                is DownloadStatus.Downloading -> {
+                is TaskState.DOWNLOADING -> {
                     progressValue = it.progress.toFloat()
                 }
 
-                is DownloadStatus.Error -> {
+                is TaskState.ERROR -> {
                     buttonState = ButtonState(
                         enable = false,
-                        stringId = com.github.knightwood.appupdate.core.R.string.app_update_download_error,
+                        stringId = com.github.knightwood.downloader.core.R.string.app_update_download_error,
                         action = Action.error,
                         file = null
                     )
                 }
 
-                DownloadStatus.IDLE -> {
+                TaskState.IDLE -> {
                     if (apk != null) {
                         buttonState = ButtonState(
                             enable = true, stringId = R.string.install,
@@ -102,7 +102,7 @@ fun BasicUpdateDialog(
                     }
                 }
 
-                DownloadStatus.End -> {
+                TaskState.End -> {
                     buttonState = ButtonState(
                         enable = true, stringId = R.string.install,
                         file = apk, action = Action.readyInstall
@@ -110,7 +110,7 @@ fun BasicUpdateDialog(
 
                 }
 
-                DownloadStatus.Start -> {
+                TaskState.STARTING -> {
                     buttonState = ButtonState(
                         enable = false,
                         stringId = R.string.app_downloading,

@@ -1,7 +1,8 @@
-package com.github.knightwood.appupdate.core.task
+package com.github.knightwood.downloader.core.task
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,7 +10,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.Closeable
 
-class TaskCollaborator(
+/**
+ * 按顺序单线程执行提交的下载任务, 不提供暂停\跳过任务功能
+ */
+class TaskLineCollaborator(
     val scope: CoroutineScope,
 ) : Runnable, Closeable {
     private var job: Job? = null
@@ -19,7 +23,7 @@ class TaskCollaborator(
      * 任务被提交到channel后无法直接移除, 如需取消任务,
      * 需将任务id放于此处, 待执行时跳过任务
      */
-    private val waitCancelTaskIds: MutableSet<String> = HashSet()
+    private val waitCancelTaskIds: MutableSet<Int> = HashSet()
 
     /**
      * 当前正在执行的任务
@@ -48,13 +52,14 @@ class TaskCollaborator(
         tasks.send(task)
     }
 
-    fun cancelTask(id: String) {
+    fun cancelTask(id: Int) {
         if (job == null) {
             return
         } else {
-            currentTask.value?.let {
-                if (it.id == id) {
-                    it.cancel()
+            currentTask.value?.let { task ->
+                if (task.id == id) {
+                    task.cancel()
+                    waitCancelTaskIds.remove(task.id)
                 }
             } ?: waitCancelTaskIds.add(id)
         }
@@ -65,7 +70,13 @@ class TaskCollaborator(
         job = null
         tasks.cancel()
         tasks.close()
+        currentTask.value?.cancel()
         currentTask.value = null
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun isEmpty() :Boolean{
+        return tasks.isEmpty
     }
 
 }

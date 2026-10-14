@@ -7,7 +7,7 @@ plugins {
 
 android {
     compileSdk = 36
-    namespace = "com.github.knightwood.appupdate.core"
+    namespace = "com.github.knightwood.downloader.core"
 
     defaultConfig {
         minSdk = 16
