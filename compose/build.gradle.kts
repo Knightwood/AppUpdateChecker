@@ -49,6 +49,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material3:material3")
 
-    compileOnly(project(":core-impl"))
+    compileOnly(project(":core"))
 
 }

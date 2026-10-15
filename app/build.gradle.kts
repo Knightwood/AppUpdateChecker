@@ -55,9 +55,9 @@ android {
 }
 
 dependencies {
-    implementation(project(":core-impl"))
-    implementation(project(":compose-ui"))
-    implementation(project(":view-ui"))
+    implementation(project(":core"))
+    implementation(project(":compose"))
+    implementation(project(":view"))
 
     implementation(libs.androidx.constraintLayout)
     implementation(libs.androidx.appCompat)

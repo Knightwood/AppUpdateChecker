@@ -40,6 +40,6 @@ dependencyResolutionManagement {
     }
 }
 include(":app")
-include(":core-impl")
-include(":compose-ui")
-include(":view-ui")
+include(":core")
+//include(":compose")
+include(":view")

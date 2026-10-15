@@ -1,25 +1,8 @@
 package com.github.knightwood.downloader.core.service
 
-import android.app.Service
-import android.content.Context
-import android.content.Intent
 import android.os.Binder
-import android.os.Build
-import android.widget.Toast
-import com.github.knightwood.downloader.core.R
 import com.github.knightwood.downloader.core.model.TaskDesc
-import com.github.knightwood.downloader.core.model.Constant
 import com.github.knightwood.downloader.core.task.DownloadTask
-import com.github.knightwood.downloader.core.util.ApkUtil
-import com.github.knightwood.downloader.core.util.FileUtil
-import com.github.knightwood.downloader.core.util.LogUtil
-import com.github.knightwood.downloader.core.util.NotificationUtil
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
 
 abstract class DownloadServiceLinker : Binder() {
     abstract val service: DownloadService
