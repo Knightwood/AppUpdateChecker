@@ -4,19 +4,27 @@ import com.github.knightwood.downloader.core.executor.DownloadExecutor
 import com.github.knightwood.downloader.core.executor.FileStorageImpl
 import com.github.knightwood.downloader.core.executor.IDownloadExecutor
 import com.github.knightwood.downloader.core.model.TaskParams
-import com.github.knightwood.downloader.core.model.TaskState
+import com.github.knightwood.downloader.core.model.DownloadStatus
+import com.github.knightwood.downloader.core.model.TaskStatus
 import com.github.knightwood.downloader.core.util.FileUtil
 import com.github.knightwood.downloader.core.util.LogUtil
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withContext
 import okio.FileSystem
 import okio.Path
 import okio.Path.Companion.toOkioPath
 import java.io.File
-import java.util.UUID
 
 class DownloadTask(
     val id: Int,
@@ -25,12 +33,17 @@ class DownloadTask(
     val produceFile: () -> File,
 ) {
     private val TAG = "DownloadTask#$id"
-    val stateFlow: MutableStateFlow<TaskState> = MutableStateFlow<TaskState>(TaskState.IDLE)
-    val isDownloading get() = stateFlow.value is TaskState.DOWNLOADING
-    val progress: Flow<Double> = stateFlow
-        .filter { it is TaskState.DOWNLOADING }
+    private val _stateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow<DownloadStatus>(DownloadStatus.IDLE)
+    val stateFlow: StateFlow<DownloadStatus> get() = _stateFlow
+
+    //最后的下载状态
+    private val lastDownloadingStatus: MutableStateFlow<DownloadStatus.DOWNLOADING?> = MutableStateFlow(null)
+
+    //当前下载进度
+    val progress: Flow<Double> = _stateFlow
+        .filter { it is DownloadStatus.DOWNLOADING }
         .map { status ->
-            if (status is TaskState.DOWNLOADING) {
+            if (status is DownloadStatus.DOWNLOADING) {
                 val max = status.length
                 val progress = status.progress
                 val curr = (progress / max * 100.0)
@@ -41,81 +54,82 @@ class DownloadTask(
             }
         }
 
-    suspend fun execute() {
-        supervisorScope {
-            val cache = conf.md5?.let { findCache(it) }
-            if (cache == null) {
-                //删除不完整(上次未完成下载)的文件
-                produceFile().delete()
-                executor
-                    .download(FileStorageImpl(produceFile), conf.url)
-                    .collect { state ->
-                        if (state is TaskState.FINISHED) {
-                            stateFlow.value = conf.md5?.let { md5: String ->
-                                val b = checkFileMd5(state.path.toFile(), md5)
-                                if (!b) {
-                                    TaskState.ERROR(IllegalStateException("MD5 not equal"))
-                                } else {
-                                    state
-                                }
-                            } ?: state
-                        } else {
-                            stateFlow.value = state
-                        }
-                    }
-            } else {
-                LogUtil.d(TAG, "Apk already exist and install it directly.")
-                stateFlow.value = TaskState.FINISHED(cache)
+    /**
+     * 在指定协程作用域上开始新的协程执行下载
+     */
+    fun runOn(scope: CoroutineScope) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                execute()
             }
         }
     }
 
-    fun pause() {
-        executor.pause()
-    }
-
-    fun resume() {
-        executor.resume()
-    }
-
-    fun cancel() {
-        executor.release()
-    }
-
-    //<editor-fold desc="工具">
     /**
-     * 从下载文件保存路径的父路径查找与下载文件具有相同md5的文件
+     * 调用此方法将挂起协程直到下载完成
      */
-    private fun findCache(target: String): Path? {
-        return runCatching {
-            produceFile().toOkioPath().parent?.let { parent ->
-                FileSystem.SYSTEM.list(parent).first { path ->
-                    val f = path.toFile()
-                    if (f.exists() && f.isFile) {
-                        checkFileMd5(f, target)
-                    } else {
-                        false
-                    }
+    suspend fun execute() {
+        val cache = conf.md5?.let { FileUtil.findCache(produceFile().toOkioPath(), it) }
+        if (cache != null) {
+            _stateFlow.value = DownloadStatus.FINISHED(cache)
+            return
+        }
+        produceFile().delete()
+        executor.download(FileStorageImpl(produceFile), conf.url)
+            .collect { state ->
+                _stateFlow.value = state
+                if (state is DownloadStatus.DOWNLOADING) {
+                    lastDownloadingStatus.value = state
                 }
             }
-        }
-            .onFailure {
-                LogUtil.e(TAG, "findCache: $it")
-            }
-            .getOrNull()
     }
 
     /**
-     * Check whether the Apk has been downloaded, don't download again
+     * 暂停下载,
+     * 调用此方法后会立即挂起协程, 直到任务状态被更新到[DownloadStatus.PAUSED]
      */
-    private fun checkFileMd5(file: File, target: String): Boolean {
-        if (target.isBlank()) {
-            return false
+    suspend fun pause() {
+        executor.pause()
+        _stateFlow.first { status ->
+            status is DownloadStatus.PAUSED
         }
-        if (file.exists()) {
-            return FileUtil.md5(file).equals(target, ignoreCase = true)
-        }
-        return false
     }
-    //</editor-fold>
+
+    /**
+     * 恢复任务,
+     * 调用此方法后会立即挂起协程, 直到任务状态被更新到[DownloadStatus.DOWNLOADING]
+     */
+    suspend fun resume() {
+        executor.resume()
+        _stateFlow.first { status ->
+            status is DownloadStatus.DOWNLOADING
+        }
+    }
+
+    /**
+     * 取消任务,
+     * 调用此方法后会立即挂起协程, 直到任务状态被更新到[DownloadStatus.CANCELED]
+     */
+    suspend fun cancel() {
+        executor.cancel()
+        _stateFlow.first { status ->
+            status is DownloadStatus.CANCELED
+        }
+    }
+
+    /**
+     * 需要保存下载进度时可调用此方法获取最后的下载进度
+     * @return 如果任务处于idle/starting状态，可能返回null
+     */
+    fun saveState(): DownloadStatus.DOWNLOADING? {
+        check(!isDownloading) {
+            "需停止/取消/暂停下载任务后调用此方法"
+        }
+        return lastDownloadingStatus.value
+    }
 }
+
+val DownloadTask.isDownloading get() = stateFlow.value is DownloadStatus.DOWNLOADING
+val DownloadTask.isPaused get() = stateFlow.value is DownloadStatus.PAUSED
+val DownloadTask.isFailed get() = stateFlow.value is DownloadStatus.ERROR
+val DownloadTask.isCancelled get() = stateFlow.value is DownloadStatus.CANCELED

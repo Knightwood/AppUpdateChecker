@@ -1,18 +1,19 @@
 package com.github.knightwood.downloader.core.executor
 
+import android.annotation.SuppressLint
 import com.github.knightwood.downloader.core.model.Constant
-import com.github.knightwood.downloader.core.model.TaskState
+import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.util.LogUtil
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import okio.Buffer
 import okio.buffer
 import okio.source
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
@@ -24,28 +25,38 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 
-class DownloadExecutor : IDownloadExecutor {
-    private val TAG = "DownloadExecutor"
-    private var isShutdown: Boolean = false
-    private var isPaused = false
-    private val paused = CompletableDeferred(Unit)
+open class DownloadExecutor : IDownloadExecutor {
+    protected open val TAG = "DownloadExecutor"
 
-    override fun download(fileStorage: FileStorage, url: String): Flow<TaskState> {
+    @Volatile
+    protected open var isShutdown = false
+
+    @Volatile
+    protected open var isPaused = false
+    protected open val pauseSignal = Channel<Unit>(Channel.CONFLATED)
+
+    override fun download(fileStorage: FileStorage, url: String): Flow<DownloadStatus> {
         trustAllHosts()
         isShutdown = false
         return flow {
-            emit(TaskState.STARTING)
+            emit(DownloadStatus.STARTING)
             saveDownloadData(fileStorage, url, this)
         }.catch {
-            emit(TaskState.ERROR(it))
+            emit(DownloadStatus.ERROR(it))
         }.flowOn(Dispatchers.IO)
     }
 
-    private suspend fun saveDownloadData(
+    @SuppressLint("NewApi")
+    protected open suspend fun saveDownloadData(
         fileStorage: FileStorage,
         url: String,
-        flow: FlowCollector<TaskState>,
+        flow: FlowCollector<DownloadStatus>,
+        maxRedirects: Int = Constant.MAX_REDIRECTS,
     ) {
+        if (maxRedirects <= 0) {
+            flow.emit(DownloadStatus.ERROR(IOException("Too many redirects")))
+            return
+        }
         val con = URL(url).openConnection() as HttpURLConnection
         con.apply {
             requestMethod = "GET"
@@ -55,10 +66,10 @@ class DownloadExecutor : IDownloadExecutor {
         }
         if (con.responseCode == HttpURLConnection.HTTP_OK) {
             //下载
-            val length = con.contentLength
-            val buffer = Buffer()
+            val length = con.contentLengthLong
+            val buffer = ByteArray(Constant.COPY_BUFFER_SIZE)
             var totalBytes = 0L
-            var read: Long
+            var read: Int
 
             //速度统计
             val startTime = System.nanoTime()//开始下载时的时间
@@ -67,10 +78,8 @@ class DownloadExecutor : IDownloadExecutor {
 
             fileStorage.use { storage: FileStorage ->
                 con.inputStream.source().buffer().use { source ->
-                    while (source.read(buffer, 8192L).also { read = it } != -1L && !isShutdown) {
-                        if (isPaused) {
-                            paused.await()
-                        }
+                    while (source.read(buffer, 0, Constant.COPY_BUFFER_SIZE).also { read = it } != -1) {
+
                         storage.write(buffer, read)
                         totalBytes += read
 
@@ -89,29 +98,45 @@ class DownloadExecutor : IDownloadExecutor {
                             println("完成: $totalBytes 字节, 平均 ${"%.2f".format(avg / 1024 / 1024)} MB/s")
                         }
 
-                        flow.emit(TaskState.DOWNLOADING(length, totalBytes))
+                        flow.emit(DownloadStatus.DOWNLOADING(length, totalBytes))
+                        if (isPaused) {
+                            flow.emit(DownloadStatus.PAUSED)
+                            pauseSignal.receive()
+                        }
+                        if (isShutdown) {
+                            break
+                        }
                     }
                 }
             }
+
             if (isShutdown) {
-                flow.emit(TaskState.DROPPED)
+                flow.emit(DownloadStatus.CANCELED)
                 fileStorage.delete()
             } else {
-                flow.emit(TaskState.FINISHED(fileStorage.path()))
+                flow.emit(DownloadStatus.FINISHED(fileStorage.path()))
             }
-        } else if (con.responseCode == HttpURLConnection.HTTP_MOVED_PERM
-            || con.responseCode == HttpURLConnection.HTTP_MOVED_TEMP
+        } else if (con.responseCode == HttpURLConnection.HTTP_MOVED_PERM ||
+            con.responseCode == HttpURLConnection.HTTP_MOVED_TEMP ||
+            con.responseCode == HttpURLConnection.HTTP_SEE_OTHER ||
+            con.responseCode == 307 || con.responseCode == 308
         ) {
-            con.disconnect()
-            val locationUrl = con.getHeaderField("Location")
+            val location = con.getHeaderField("Location")   // 先取
+            con.disconnect()                                // 再断
+            if (location.isNullOrBlank()) {
+                flow.emit(DownloadStatus.ERROR(IOException("Redirect without Location")))
+                return
+            }
+            val next = if (location.startsWith("http")) location else URL(URL(url), location).toString()
             LogUtil.d(
                 TAG,
-                "The current url is the redirect Url, the redirected url is $locationUrl"
+                "The current url is the redirect Url, the redirected url is $next"
             )
-            saveDownloadData(fileStorage, locationUrl, flow)
+            saveDownloadData(fileStorage, next, flow, maxRedirects - 1)
+//            if (isShutdown) { flow.emit(DownloadStatus.CANCELED); return }
         } else {
             val e = SocketTimeoutException("Error: Http response code = ${con.responseCode}")
-            flow.emit(TaskState.ERROR(e))
+            flow.emit(DownloadStatus.ERROR(e))
         }
         con.disconnect()
     }
@@ -120,15 +145,20 @@ class DownloadExecutor : IDownloadExecutor {
         isPaused = true
     }
 
+    override fun cancel() {
+        isShutdown = true;
+        resume()// 唤醒被 pause 卡住的协程
+    }
+
     override fun resume() {
         isPaused = false
-        paused.complete(Unit)
+        pauseSignal.trySend(Unit)
     }
 
     /**
      * fix https url (SSLHandshakeException) exception
      */
-    private fun trustAllHosts() {
+    protected open fun trustAllHosts() {
         val manager: TrustManager = object : X509TrustManager {
             override fun getAcceptedIssuers(): Array<X509Certificate> {
                 return arrayOf()
@@ -151,11 +181,4 @@ class DownloadExecutor : IDownloadExecutor {
         }
     }
 
-    override fun cancel() {
-        isShutdown = true
-    }
-
-    override fun release() {
-        cancel()
-    }
 }

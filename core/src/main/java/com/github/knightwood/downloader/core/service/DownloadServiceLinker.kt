@@ -12,6 +12,8 @@ abstract class DownloadServiceLinker : Binder() {
         conf: TaskDesc,
     ):DownloadTask
 
+    abstract fun findTask(id: Int): DownloadTask?
+
     abstract fun cancelTask(id: Int)
 
     abstract fun stopService()

@@ -1,0 +1,338 @@
+package com.github.knightwood.downloader.core.executor
+
+
+import android.annotation.SuppressLint
+import com.github.knightwood.downloader.core.model.ChunkProgress
+import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.model.DownloadStatus
+import com.github.knightwood.downloader.core.util.LogUtil
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.ProducerScope
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.Mutex
+import okio.buffer
+import okio.source
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicLongArray
+
+/**
+ * 多线程分块下载执行器。
+ *
+ * - 若服务端支持 `Accept-Ranges: bytes` 且文件 >= [minChunkSize], 则并发分块。
+ * - 否则退化为 [DownloadExecutor] 的单连接下载。
+ * - 每个分块可独立报告进度, 支持断点续传 (通过 [ChunkProgress.downloaded])。
+ */
+open class MultiChunkDownloadExecutor(
+    protected val chunkCount: Int = Constant.DEFAULT_CHUNK_COUNT,
+    protected val minChunkSize: Long = Constant.MIN_CHUNK_SIZE,
+) : DownloadExecutor() {
+
+    override val TAG: String = "MultiChunkDownloadExecutor"
+
+    override fun download(fileStorage: FileStorage, url: String): Flow<DownloadStatus> {
+        // 分块下载必须使用支持随机写的 storage
+        if (fileStorage !is RandomAccessFileStorageImpl) {
+            LogUtil.w(TAG, "fileStorage 不是 RandomAccessFileStorageImpl, 退化为单连接下载")
+            return super.download(fileStorage, url)
+        }
+        return chunkFlow(fileStorage, url).flowOn(Dispatchers.IO)
+    }
+
+    private fun chunkFlow(
+        fileStorage: RandomAccessFileStorageImpl,
+        url: String,
+    ): Flow<DownloadStatus> {
+        return channelFlow {
+            trustAllHosts()
+            isShutdown = false
+            send(DownloadStatus.STARTING)
+
+            try {
+                val meta = probe(url) ?: run {
+                    send(DownloadStatus.ERROR(IOException("无法获取文件元信息: $url")))
+                    return@channelFlow
+                }
+
+                if (!meta.acceptRanges || meta.length < minChunkSize || chunkCount <= 1) {
+                    LogUtil.d(TAG, "退化为单连接下载 (acceptRanges=${meta.acceptRanges}, length=${meta.length})")
+                    // 直接复用父类逻辑: 需要把 storage 转成普通 FileStorage 语义即可
+                    // 但这里已经在 channelFlow 里, 不能直接调 super.download
+                    // 用 downloadSingle 把父类的 saveDownloadData 逻辑跑一遍
+                    downloadSingle(fileStorage, url, this)
+                    return@channelFlow
+                }
+
+                // 1) 规划分块
+                val ranges = planChunks(meta.length)
+                LogUtil.d(TAG, "分块下载: length=${meta.length}, chunks=${ranges.size}")
+
+                // 2) 进度统计
+                val chunkProgress = AtomicLongArray(ranges.size)
+                val totalProgress = AtomicLong(0)
+                val progressLock = Mutex()
+                var lastEmitTime = 0L
+                val startTime = System.nanoTime()
+                var lastBytes = 0L
+                var lastTime = startTime
+
+                // 3) 并发下载
+                coroutineScope<Unit> {
+                    val jobs = ranges.mapIndexed { index, (start, end) ->
+                        async {
+                            downloadChunk(
+                                storage = fileStorage,
+                                url = url,
+                                index = index,
+                                start = start,
+                                end = end,
+                                onProgress = { delta ->
+                                    val newTotal = totalProgress.addAndGet(delta.toLong())
+                                    chunkProgress.set(index, chunkProgress.get(index) + delta)
+                                    // 节流: 每 200ms emit 一次, 避免高频 emit 拖慢下载
+                                    val now = System.nanoTime()
+                                    if (now - lastEmitTime >= 200_000_000L) {
+                                        lastEmitTime = now
+                                        // channelFlow 的 send 是 suspend, 但 onProgress 是同步回调
+                                        // 用 trySend 避免阻塞下载线程
+                                        val elapsed = (now - lastTime) / 1e9
+                                        val instant = if (elapsed > 0) (newTotal - lastBytes) / elapsed else 0.0
+                                        val totalSec = (now - startTime) / 1e9
+                                        val avg = if (totalSec > 0) newTotal / totalSec else 0.0
+                                        lastBytes = newTotal
+                                        lastTime = now
+                                        val chunks = ranges.mapIndexed { i, (s, e) ->
+                                            ChunkProgress(i, s, e, s + chunkProgress.get(i))
+                                        }
+                                        trySend(
+                                            DownloadStatus.DOWNLOADING(
+                                                length = meta.length,
+                                                progress = newTotal,
+                                                snapSpeed = instant,
+                                                averageSpeed = avg,
+                                                chunks = chunks,
+                                            )
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                    }
+                    jobs.awaitAll()
+                    Unit
+                }
+
+                // 4) 完成
+                if (isShutdown) {
+                    send(DownloadStatus.CANCELED)
+                    fileStorage.delete()
+                } else {
+                    fileStorage.flush()
+                    send(DownloadStatus.FINISHED(fileStorage.path()))
+                }
+            } catch (e: CancellationException) {
+                fileStorage.delete()
+                throw e
+            } catch (e: Throwable) {
+                send(DownloadStatus.ERROR(e))
+            } finally {
+                runCatching { fileStorage.close() }
+            }
+        }
+    }
+
+    /**
+     * 单连接下载 (退化为父类逻辑, 但复用了 [RandomAccessFileStorageImpl])。
+     * 直接调用父类的 [saveDownloadData] 不合适, 因为它把 storage 当普通 Sink 用。
+     * 这里重写一份, 保持和父类一致的语义。
+     */
+    @SuppressLint("NewApi")
+    private suspend fun downloadSingle(
+        fileStorage: FileStorage,
+        url: String,
+        flow: ProducerScope<DownloadStatus>,
+        maxRedirects: Int = Constant.MAX_REDIRECTS,
+    ) {
+        if (maxRedirects <= 0) {
+            flow.send(DownloadStatus.ERROR(IOException("Too many redirects")))
+            return
+        }
+        val con = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            readTimeout = Constant.HTTP_TIME_OUT
+            connectTimeout = Constant.HTTP_TIME_OUT
+            setRequestProperty("Accept-Encoding", "identity")
+        }
+        try {
+            when (con.responseCode) {
+                HttpURLConnection.HTTP_OK -> {
+                    val length = con.contentLengthLong
+                    val buffer = ByteArray(Constant.COPY_BUFFER_SIZE)
+                    var totalBytes = 0L
+                    var read: Int
+                    fileStorage.use { storage ->
+                        con.inputStream.source().buffer().use { source ->
+                            while (source.read(buffer, 0, Constant.COPY_BUFFER_SIZE).also { read = it } != -1) {
+                                if (isShutdown) break
+                                if (isPaused) pauseSignal.receive()
+                                storage.write(buffer, read)
+                                totalBytes += read
+                                flow.send(DownloadStatus.DOWNLOADING(length, totalBytes))
+                            }
+                        }
+                    }
+                    if (isShutdown) {
+                        flow.send(DownloadStatus.CANCELED)
+                        fileStorage.delete()
+                    } else {
+                        flow.send(DownloadStatus.FINISHED(fileStorage.path()))
+                    }
+                }
+
+                HttpURLConnection.HTTP_MOVED_PERM,
+                HttpURLConnection.HTTP_MOVED_TEMP,
+                HttpURLConnection.HTTP_SEE_OTHER,
+                307, 308,
+                    -> {
+                    val location = con.getHeaderField("Location")
+                    if (location.isNullOrBlank()) {
+                        flow.send(DownloadStatus.ERROR(IOException("Redirect without Location")))
+                        return
+                    }
+                    val next = if (location.startsWith("http")) location
+                    else URL(URL(url), location).toString()
+                    downloadSingle(fileStorage, next, flow, maxRedirects - 1)
+                }
+
+                else -> {
+                    flow.send(DownloadStatus.ERROR(IOException("HTTP ${con.responseCode}")))
+                }
+            }
+        } finally {
+            con.disconnect()
+        }
+    }
+
+    // ---------- 分块下载核心 ----------
+
+    /**
+     * 下载单个分块。
+     *
+     * @param start 绝对起始偏移 (含)
+     * @param end   绝对结束偏移 (含)
+     * @param onProgress 增量回调, 参数是本块新增字节数
+     */
+    protected open suspend fun downloadChunk(
+        storage: RandomAccessFileStorageImpl,
+        url: String,
+        index: Int,
+        start: Long,
+        end: Long,
+        onProgress: (Int) -> Unit,
+    ) {
+        val con = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            setRequestProperty("Range", "bytes=$start-$end")
+            setRequestProperty("Accept-Encoding", "identity")
+            readTimeout = Constant.HTTP_TIME_OUT
+            connectTimeout = Constant.HTTP_TIME_OUT
+        }
+        try {
+            val code = con.responseCode
+            if (code != HttpURLConnection.HTTP_PARTIAL && code != HttpURLConnection.HTTP_OK) {
+                throw IOException("分块 #$index 请求失败: HTTP $code")
+            }
+            // 如果服务端返回 200 (不支持 Range), 说明它忽略了 Range 头, 会把整个文件发回来。
+            // 这种情况下我们只读前 (end-start+1) 字节并写入 start 偏移是错误的 (文件布局会乱),
+            // 但为了容错, 这里只接受 206。若探测阶段 acceptRanges=true 而这里返回 200,
+            // 说明服务端行为不一致, 直接报错让上层处理。
+            if (code == HttpURLConnection.HTTP_OK && (start != 0L || end != con.contentLength - 1L)) {
+                throw IOException("服务端不支持 Range, 分块 #$index 收到 200")
+            }
+
+            val buffer = ByteArray(Constant.COPY_BUFFER_SIZE)
+            var read: Int
+            con.inputStream.source().buffer().use { source ->
+                var pos = start
+                while (source.read(buffer, 0, Constant.COPY_BUFFER_SIZE).also { read = it } != -1) {
+                    currentCoroutineContext().ensureActive()
+                    if (isShutdown) break
+                    if (isPaused) pauseSignal.receive()
+                    storage.writeAt(pos, buffer, 0, read)
+                    pos += read
+                    onProgress(read)
+                }
+                // 校验: 本块是否下完
+                if (!isShutdown && pos != end + 1) {
+                    throw IOException("分块 #$index 提前结束: 期望到 ${end + 1}, 实际到 $pos")
+                }
+            }
+        } finally {
+            con.disconnect()
+        }
+    }
+
+    // ---------- 探测 ----------
+
+    @SuppressLint("NewApi")
+    protected open suspend fun probe(url: String): FileMeta? {
+        val con = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            // 用 Range 探测而不是 HEAD, 因为很多服务器 HEAD 不返回 Accept-Ranges
+            setRequestProperty("Range", "bytes=0-0")
+            setRequestProperty("Accept-Encoding", "identity")
+            readTimeout = Constant.HTTP_TIME_OUT
+            connectTimeout = Constant.HTTP_TIME_OUT
+        }
+        return try {
+            val code = con.responseCode
+            val acceptRanges = con.getHeaderField("Accept-Ranges")?.contains("bytes", ignoreCase = true) == true
+            val length = when (code) {
+                HttpURLConnection.HTTP_PARTIAL -> {
+                    // Content-Range: bytes 0-0/12345
+                    val contentRange = con.getHeaderField("Content-Range")
+                    val total = contentRange?.substringAfterLast('/')?.toLongOrNull()
+                    total ?: con.contentLengthLong
+                }
+
+                HttpURLConnection.HTTP_OK -> con.contentLengthLong
+                else -> return null
+            }
+            if (length <= 0) return null
+            FileMeta(
+                length = length,
+                acceptRanges = acceptRanges || code == HttpURLConnection.HTTP_PARTIAL,
+            )
+        } catch (e: Exception) {
+            LogUtil.e(TAG, "probe error: $e")
+            null
+        } finally {
+            con.disconnect()
+        }
+    }
+
+    protected fun planChunks(totalLength: Long): List<Pair<Long, Long>> {
+        val actualChunks = minOf(chunkCount.toLong(), (totalLength / minChunkSize).coerceAtLeast(1L)).toInt()
+        val chunkSize = totalLength / actualChunks
+        return (0 until actualChunks).map { i ->
+            val start = i * chunkSize
+            val end = if (i == actualChunks - 1) totalLength - 1 else (start + chunkSize - 1)
+            start to end
+        }
+    }
+
+    protected data class FileMeta(
+        val length: Long,
+        val acceptRanges: Boolean,
+    )
+}

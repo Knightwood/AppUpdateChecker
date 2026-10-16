@@ -1,6 +1,6 @@
 package com.github.knightwood.downloader.core.executor
 
-import com.github.knightwood.downloader.core.model.TaskState
+import com.github.knightwood.downloader.core.model.DownloadStatus
 import kotlinx.coroutines.flow.Flow
 
 interface IDownloadExecutor {
@@ -11,7 +11,10 @@ interface IDownloadExecutor {
      * @param url 下载地址
      * 返回下载状态
      */
-    fun download(fileStorage: FileStorage, url: String): Flow<TaskState>
+    fun download(
+        fileStorage: FileStorage,
+        url: String,
+    ): Flow<DownloadStatus>
 
     fun pause() {
         throw NotImplementedError()
@@ -26,8 +29,4 @@ interface IDownloadExecutor {
      */
     fun cancel()
 
-    /**
-     * release memory
-     */
-    fun release()
 }

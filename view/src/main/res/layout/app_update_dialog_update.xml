@@ -38,6 +38,7 @@
             android:textColor="#757575"
             android:textSize="14sp"
             android:visibility="gone"
+            tools:visibility="visible"
             tools:text="新版本大小：5M" />
 
         <ScrollView
@@ -64,7 +65,10 @@
             android:layout_height="wrap_content"
             android:layout_marginLeft="16dp"
             android:layout_marginTop="8dp"
-            android:layout_marginRight="16dp" />
+            android:layout_marginRight="16dp"
+            android:visibility="gone"
+            tools:visibility="visible"
+        />
 
         <android.widget.Button
             android:id="@id/app_update_btn_update"

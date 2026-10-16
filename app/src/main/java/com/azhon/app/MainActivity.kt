@@ -121,7 +121,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener,
             }
 
             R.id.btn_6 -> {
-                startActivity(Intent(this, ComposeExampleActivity::class.java))
+//                startActivity(Intent(this, ComposeExampleActivity::class.java))
             }
         }
     }

@@ -7,7 +7,7 @@ import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.github.knightwood.downloader.core.model.Constant
-import com.github.knightwood.downloader.core.model.TaskState
+import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.util.ApkUtil
 import com.github.knightwood.downloader.core.R
 
@@ -19,7 +19,7 @@ interface INotifier {
 
     fun foregroundNotification(context: Context): Notification
 
-    fun notificationOf(taskId: Int, state: TaskState, context: Context): Notification
+    fun notificationOf(taskId: Int, state: DownloadStatus, context: Context): Notification
 
     fun show(notificationManager: NotificationManager, taskId: Int, notification: Notification)
     fun createNotificationChannel(context: Context)
@@ -61,29 +61,29 @@ open class BasicNotifierImpl : INotifier {
         notificationManager.notify(NOTIFY_ID, notification)
     }
 
-    override fun notificationOf(taskId: Int, state: TaskState, context: Context): Notification {
+    override fun notificationOf(taskId: Int, state: DownloadStatus, context: Context): Notification {
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(ApkUtil.getAppName(context))
             .setContentText(context.resources.getString(R.string.download_service_foreground_desc))
             .setSmallIcon(ApkUtil.getAppIcon(context))
 
         when (state) {
-            is TaskState.DOWNLOADING -> {
-                builder.setProgress(state.length, state.progress.toInt(), true)
+            is DownloadStatus.DOWNLOADING -> {
+                builder.setProgress(state.length.toInt(), state.progress.toInt(), true)
             }
 
-            is TaskState.ERROR -> {
+            is DownloadStatus.ERROR -> {
                 builder.setContentText(context.resources.getString(R.string.app_update_download_error))
             }
 
-            is TaskState.FINISHED -> {
+            is DownloadStatus.FINISHED -> {
                 builder.setContentText(
                     context.resources.getString(R.string.app_update_download_completed) + "\n" +
                             context.resources.getString(R.string.app_update_click_hint)
                 )
             }
 
-            TaskState.DROPPED, TaskState.IDLE, TaskState.PAUSED, TaskState.STARTING -> {
+            DownloadStatus.CANCELED, DownloadStatus.IDLE, DownloadStatus.PAUSED, DownloadStatus.STARTING -> {
                 builder.setContentText(context.resources.getString(R.string.app_update_start_download))
             }
         }
