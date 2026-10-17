@@ -7,7 +7,6 @@ import com.github.knightwood.downloader.core.util.LogUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -25,7 +24,9 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 
-open class DownloadExecutor : IDownloadExecutor {
+open class DownloadExecutor(
+    protected var lastDownloadProgress: DownloadStatus.DOWNLOADING? = null,
+) : IDownloadExecutor {
     protected open val TAG = "DownloadExecutor"
 
     @Volatile
@@ -34,27 +35,33 @@ open class DownloadExecutor : IDownloadExecutor {
     @Volatile
     protected open var isPaused = false
     protected open val pauseSignal = Channel<Unit>(Channel.CONFLATED)
+    override fun restoreState(saveState: DownloadStatus.DOWNLOADING): IDownloadExecutor {
+        lastDownloadProgress = saveState
+        return this
+    }
 
     override fun download(fileStorage: FileStorage, url: String): Flow<DownloadStatus> {
         trustAllHosts()
         isShutdown = false
         return flow {
             emit(DownloadStatus.STARTING)
-            saveDownloadData(fileStorage, url, this)
+            parseUrlExecDownload(fileStorage, url) {
+                emit(it)
+            }
         }.catch {
             emit(DownloadStatus.ERROR(it))
         }.flowOn(Dispatchers.IO)
     }
 
     @SuppressLint("NewApi")
-    protected open suspend fun saveDownloadData(
+    protected open suspend fun parseUrlExecDownload(
         fileStorage: FileStorage,
         url: String,
-        flow: FlowCollector<DownloadStatus>,
         maxRedirects: Int = Constant.MAX_REDIRECTS,
+        onStatusChanged: suspend (DownloadStatus) -> Unit,
     ) {
         if (maxRedirects <= 0) {
-            flow.emit(DownloadStatus.ERROR(IOException("Too many redirects")))
+            onStatusChanged(DownloadStatus.ERROR(IOException("Too many redirects")))
             return
         }
         val con = URL(url).openConnection() as HttpURLConnection
@@ -98,9 +105,9 @@ open class DownloadExecutor : IDownloadExecutor {
                             println("完成: $totalBytes 字节, 平均 ${"%.2f".format(avg / 1024 / 1024)} MB/s")
                         }
 
-                        flow.emit(DownloadStatus.DOWNLOADING(length, totalBytes))
+                        onStatusChanged(DownloadStatus.DOWNLOADING(length, totalBytes))
                         if (isPaused) {
-                            flow.emit(DownloadStatus.PAUSED)
+                            onStatusChanged(DownloadStatus.PAUSED)
                             pauseSignal.receive()
                         }
                         if (isShutdown) {
@@ -111,10 +118,9 @@ open class DownloadExecutor : IDownloadExecutor {
             }
 
             if (isShutdown) {
-                flow.emit(DownloadStatus.CANCELED)
-                fileStorage.delete()
+                onStatusChanged(DownloadStatus.CANCELED)
             } else {
-                flow.emit(DownloadStatus.FINISHED(fileStorage.path()))
+                onStatusChanged(DownloadStatus.FINISHED(fileStorage.path()))
             }
         } else if (con.responseCode == HttpURLConnection.HTTP_MOVED_PERM ||
             con.responseCode == HttpURLConnection.HTTP_MOVED_TEMP ||
@@ -124,7 +130,7 @@ open class DownloadExecutor : IDownloadExecutor {
             val location = con.getHeaderField("Location")   // 先取
             con.disconnect()                                // 再断
             if (location.isNullOrBlank()) {
-                flow.emit(DownloadStatus.ERROR(IOException("Redirect without Location")))
+                onStatusChanged(DownloadStatus.ERROR(IOException("Redirect without Location")))
                 return
             }
             val next = if (location.startsWith("http")) location else URL(URL(url), location).toString()
@@ -132,11 +138,11 @@ open class DownloadExecutor : IDownloadExecutor {
                 TAG,
                 "The current url is the redirect Url, the redirected url is $next"
             )
-            saveDownloadData(fileStorage, next, flow, maxRedirects - 1)
-//            if (isShutdown) { flow.emit(DownloadStatus.CANCELED); return }
+            parseUrlExecDownload(fileStorage, next, maxRedirects - 1, onStatusChanged)
+//            if (isShutdown) { provideStatus(DownloadStatus.CANCELED); return }
         } else {
             val e = SocketTimeoutException("Error: Http response code = ${con.responseCode}")
-            flow.emit(DownloadStatus.ERROR(e))
+            onStatusChanged(DownloadStatus.ERROR(e))
         }
         con.disconnect()
     }

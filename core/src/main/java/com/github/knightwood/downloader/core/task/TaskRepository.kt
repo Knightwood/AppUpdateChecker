@@ -66,6 +66,10 @@ class TaskRepository {
             TaskSaveState(key, statusOf(key), value.saveState())
         }
     }
+
+    fun findById(id: Int): DownloadTask? {
+        return all.values.find { it.id == id }
+    }
 }
 
 sealed class TaskEvent {

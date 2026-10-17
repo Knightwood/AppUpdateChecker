@@ -16,6 +16,7 @@ import com.github.knightwood.downloader.core.model.Constant
 import com.github.knightwood.downloader.core.executor.DownloadExecutor
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.task.DownloadTask
+import com.github.knightwood.downloader.core.task.TaskLineCollaborator
 import com.github.knightwood.downloader.core.task.TaskRepository
 import com.github.knightwood.downloader.core.task.TaskScheduler
 import kotlinx.coroutines.CoroutineName
@@ -36,8 +37,7 @@ class DownloadService : Service() {
         CoroutineScope(Dispatchers.IO) + SupervisorJob() + CoroutineName(Constant.COROUTINE_NAME)
     private var bomb: Job? = null
     private val confMap: MutableMap<Int, TaskDesc> = mutableMapOf()
-    private val repo: TaskRepository = TaskRepository()
-    private val taskCollaborator: TaskScheduler = TaskScheduler(scope,repo)
+    private val taskCollaborator: TaskLineCollaborator = TaskLineCollaborator(scope)
     private val conn = object : DownloadServiceLinker() {
 
         override val service: DownloadService
@@ -45,10 +45,8 @@ class DownloadService : Service() {
 
         override fun submitTask(id: Int, conf: TaskDesc): DownloadTask {
             this@DownloadService.confMap[id] = conf
-
             val task = generateTask(id, conf)
-            repo.add(task)
-            taskCollaborator.enqueue(task.id)
+            taskCollaborator.submit(task)
             return task
         }
 

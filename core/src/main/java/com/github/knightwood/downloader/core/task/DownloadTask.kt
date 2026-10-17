@@ -5,24 +5,18 @@ import com.github.knightwood.downloader.core.executor.FileStorageImpl
 import com.github.knightwood.downloader.core.executor.IDownloadExecutor
 import com.github.knightwood.downloader.core.model.TaskParams
 import com.github.knightwood.downloader.core.model.DownloadStatus
-import com.github.knightwood.downloader.core.model.TaskStatus
 import com.github.knightwood.downloader.core.util.FileUtil
 import com.github.knightwood.downloader.core.util.LogUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
-import okio.FileSystem
-import okio.Path
 import okio.Path.Companion.toOkioPath
 import java.io.File
 
@@ -37,7 +31,7 @@ class DownloadTask(
     val stateFlow: StateFlow<DownloadStatus> get() = _stateFlow
 
     //最后的下载状态
-    private val lastDownloadingStatus: MutableStateFlow<DownloadStatus.DOWNLOADING?> = MutableStateFlow(null)
+    private var lastDownloadingStatus: DownloadStatus.DOWNLOADING? = null
 
     //当前下载进度
     val progress: Flow<Double> = _stateFlow
@@ -74,12 +68,14 @@ class DownloadTask(
             _stateFlow.value = DownloadStatus.FINISHED(cache)
             return
         }
-        produceFile().delete()
+        if (conf.deleteLastFile) {
+            produceFile().delete()
+        }
         executor.download(FileStorageImpl(produceFile), conf.url)
             .collect { state ->
                 _stateFlow.value = state
                 if (state is DownloadStatus.DOWNLOADING) {
-                    lastDownloadingStatus.value = state
+                    lastDownloadingStatus = state
                 }
             }
     }
@@ -122,13 +118,33 @@ class DownloadTask(
      * @return 如果任务处于idle/starting状态，可能返回null
      */
     fun saveState(): DownloadStatus.DOWNLOADING? {
-        check(!isDownloading) {
-            "需停止/取消/暂停下载任务后调用此方法"
+        if (isDownloading) {
+            throw IllegalStateException("需停止/取消/暂停下载任务后调用此方法")
         }
-        return lastDownloadingStatus.value
+        return lastDownloadingStatus
+    }
+
+    /**
+     * 在执行[runOn]、[execute]之前调用此方法恢复任务进度
+     * 只有分块下载时有用
+     *
+     * ```
+     * val task = DownloadTask()
+     * task.resumeFrom(state)
+     *     .execute()
+     * ```
+     */
+    fun restoreState(state: DownloadStatus.DOWNLOADING): DownloadTask {
+        if (!isIdle) {
+            throw IllegalStateException("only in IDLE state can be resumed.")
+        }
+        executor.restoreState(state)
+        conf.deleteLastFile = false
+        return this
     }
 }
 
+val DownloadTask.isIdle get() = stateFlow.value is DownloadStatus.IDLE
 val DownloadTask.isDownloading get() = stateFlow.value is DownloadStatus.DOWNLOADING
 val DownloadTask.isPaused get() = stateFlow.value is DownloadStatus.PAUSED
 val DownloadTask.isFailed get() = stateFlow.value is DownloadStatus.ERROR

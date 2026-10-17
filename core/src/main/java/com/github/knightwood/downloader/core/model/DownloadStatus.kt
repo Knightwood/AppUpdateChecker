@@ -1,7 +1,11 @@
 package com.github.knightwood.downloader.core.model
 
 import okio.Path
+import com.github.knightwood.downloader.core.executor.DownloadExecutor
 
+/**
+ * 反应当前[DownloadExecutor]下载状态、进度
+ */
 sealed class DownloadStatus {
 
     data object IDLE : DownloadStatus()

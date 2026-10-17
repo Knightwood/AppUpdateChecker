@@ -1,9 +1,18 @@
 package com.github.knightwood.downloader.core.executor
 
 import com.github.knightwood.downloader.core.model.DownloadStatus
+import com.github.knightwood.downloader.core.model.TaskStatus
 import kotlinx.coroutines.flow.Flow
 
 interface IDownloadExecutor {
+    /**
+     * 在执行[download]方法下载之前，调用此方法设置上次下载中断的进度
+     * ```
+     * executor.resumeFrom(lastSaveState)
+     *         .download(fileStorage,url)
+     * ```
+     */
+    fun restoreState(saveState: DownloadStatus.DOWNLOADING): IDownloadExecutor = this
     /**
      * download apk from apkUrl
      *

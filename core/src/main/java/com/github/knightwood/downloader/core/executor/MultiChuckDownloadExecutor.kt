@@ -36,7 +36,8 @@ import java.util.concurrent.atomic.AtomicLongArray
 open class MultiChunkDownloadExecutor(
     protected val chunkCount: Int = Constant.DEFAULT_CHUNK_COUNT,
     protected val minChunkSize: Long = Constant.MIN_CHUNK_SIZE,
-) : DownloadExecutor() {
+    lastDownloadProgress: DownloadStatus.DOWNLOADING? = null,
+) : DownloadExecutor(lastDownloadProgress) {
 
     override val TAG: String = "MultiChunkDownloadExecutor"
 
@@ -90,12 +91,16 @@ open class MultiChunkDownloadExecutor(
                 coroutineScope<Unit> {
                     val jobs = ranges.mapIndexed { index, (start, end) ->
                         async {
+                            //上次的分块进度
+                            val last = lastDownloadProgress?.chunks?.find { it ->
+                                it.index == index
+                            }
                             downloadChunk(
                                 storage = fileStorage,
                                 url = url,
                                 index = index,
-                                start = start,
-                                end = end,
+                                start = last?.start ?: start,
+                                end = last?.end ?: end,
                                 onProgress = { delta ->
                                     val newTotal = totalProgress.addAndGet(delta.toLong())
                                     chunkProgress.set(index, chunkProgress.get(index) + delta)
@@ -135,13 +140,11 @@ open class MultiChunkDownloadExecutor(
                 // 4) 完成
                 if (isShutdown) {
                     send(DownloadStatus.CANCELED)
-                    fileStorage.delete()
                 } else {
                     fileStorage.flush()
                     send(DownloadStatus.FINISHED(fileStorage.path()))
                 }
             } catch (e: CancellationException) {
-                fileStorage.delete()
                 throw e
             } catch (e: Throwable) {
                 send(DownloadStatus.ERROR(e))
@@ -153,8 +156,6 @@ open class MultiChunkDownloadExecutor(
 
     /**
      * 单连接下载 (退化为父类逻辑, 但复用了 [RandomAccessFileStorageImpl])。
-     * 直接调用父类的 [saveDownloadData] 不合适, 因为它把 storage 当普通 Sink 用。
-     * 这里重写一份, 保持和父类一致的语义。
      */
     @SuppressLint("NewApi")
     private suspend fun downloadSingle(
@@ -163,63 +164,8 @@ open class MultiChunkDownloadExecutor(
         flow: ProducerScope<DownloadStatus>,
         maxRedirects: Int = Constant.MAX_REDIRECTS,
     ) {
-        if (maxRedirects <= 0) {
-            flow.send(DownloadStatus.ERROR(IOException("Too many redirects")))
-            return
-        }
-        val con = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            readTimeout = Constant.HTTP_TIME_OUT
-            connectTimeout = Constant.HTTP_TIME_OUT
-            setRequestProperty("Accept-Encoding", "identity")
-        }
-        try {
-            when (con.responseCode) {
-                HttpURLConnection.HTTP_OK -> {
-                    val length = con.contentLengthLong
-                    val buffer = ByteArray(Constant.COPY_BUFFER_SIZE)
-                    var totalBytes = 0L
-                    var read: Int
-                    fileStorage.use { storage ->
-                        con.inputStream.source().buffer().use { source ->
-                            while (source.read(buffer, 0, Constant.COPY_BUFFER_SIZE).also { read = it } != -1) {
-                                if (isShutdown) break
-                                if (isPaused) pauseSignal.receive()
-                                storage.write(buffer, read)
-                                totalBytes += read
-                                flow.send(DownloadStatus.DOWNLOADING(length, totalBytes))
-                            }
-                        }
-                    }
-                    if (isShutdown) {
-                        flow.send(DownloadStatus.CANCELED)
-                        fileStorage.delete()
-                    } else {
-                        flow.send(DownloadStatus.FINISHED(fileStorage.path()))
-                    }
-                }
-
-                HttpURLConnection.HTTP_MOVED_PERM,
-                HttpURLConnection.HTTP_MOVED_TEMP,
-                HttpURLConnection.HTTP_SEE_OTHER,
-                307, 308,
-                    -> {
-                    val location = con.getHeaderField("Location")
-                    if (location.isNullOrBlank()) {
-                        flow.send(DownloadStatus.ERROR(IOException("Redirect without Location")))
-                        return
-                    }
-                    val next = if (location.startsWith("http")) location
-                    else URL(URL(url), location).toString()
-                    downloadSingle(fileStorage, next, flow, maxRedirects - 1)
-                }
-
-                else -> {
-                    flow.send(DownloadStatus.ERROR(IOException("HTTP ${con.responseCode}")))
-                }
-            }
-        } finally {
-            con.disconnect()
+        super.parseUrlExecDownload(fileStorage, url, maxRedirects) {
+            flow.send(it)
         }
     }
 
