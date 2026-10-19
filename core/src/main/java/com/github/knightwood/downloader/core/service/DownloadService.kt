@@ -11,14 +11,12 @@ import android.os.IBinder
 import androidx.core.app.ServiceCompat
 import com.github.knightwood.downloader.core.Downloader
 import com.github.knightwood.downloader.core.model.TaskDesc
-import com.github.knightwood.downloader.core.model.TaskParams
+import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import com.github.knightwood.downloader.core.model.Constant
 import com.github.knightwood.downloader.core.executor.DownloadExecutor
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.task.DownloadTask
-import com.github.knightwood.downloader.core.task.TaskLineCollaborator
-import com.github.knightwood.downloader.core.task.TaskRepository
-import com.github.knightwood.downloader.core.task.TaskScheduler
+import com.github.knightwood.downloader.core.taskmgr.TaskLineCollaborator
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -111,7 +109,7 @@ class DownloadService : Service() {
         return DownloadTask(
             id = id,
             executor = conf.taskImI.downloadExecutor ?: DownloadExecutor(),
-            conf = TaskParams(
+            conf = DownloadTaskConf(
                 md5 = conf.fileEntity.md5,
                 url = conf.fileEntity.url!!
             ),

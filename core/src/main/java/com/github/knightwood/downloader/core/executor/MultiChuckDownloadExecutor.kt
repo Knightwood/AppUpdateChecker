@@ -1,21 +1,18 @@
 package com.github.knightwood.downloader.core.executor
 
-
 import android.annotation.SuppressLint
+import com.github.knightwood.downloader.core.filestorage.FileStorage
+import com.github.knightwood.downloader.core.filestorage.RandomAccessFileStorageImpl
 import com.github.knightwood.downloader.core.model.ChunkProgress
 import com.github.knightwood.downloader.core.model.Constant
 import com.github.knightwood.downloader.core.model.DownloadStatus
+import com.github.knightwood.downloader.core.util.HttpConnectionUtils
 import com.github.knightwood.downloader.core.util.LogUtil
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ProducerScope
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import okio.buffer
@@ -38,7 +35,7 @@ open class MultiChunkDownloadExecutor(
     protected val minChunkSize: Long = Constant.MIN_CHUNK_SIZE,
     lastDownloadProgress: DownloadStatus.DOWNLOADING? = null,
 ) : DownloadExecutor(lastDownloadProgress) {
-
+    override val isSupportRestoreState: Boolean = true
     override val TAG: String = "MultiChunkDownloadExecutor"
 
     override fun download(fileStorage: FileStorage, url: String): Flow<DownloadStatus> {
@@ -60,7 +57,7 @@ open class MultiChunkDownloadExecutor(
             send(DownloadStatus.STARTING)
 
             try {
-                val meta = probe(url) ?: run {
+                val meta = HttpConnectionUtils.probe(url) ?: run {
                     send(DownloadStatus.ERROR(IOException("无法获取文件元信息: $url")))
                     return@channelFlow
                 }
@@ -79,6 +76,15 @@ open class MultiChunkDownloadExecutor(
                 LogUtil.d(TAG, "分块下载: length=${meta.length}, chunks=${ranges.size}")
 
                 // 2) 进度统计
+                //记录此次下载的分块进度状态
+                val chuckProgressMap = mutableMapOf<Int, ChunkProgress>()
+                //记录此次下载的总进度状态
+                var currentDownloadProgress: DownloadStatus.DOWNLOADING? = lastDownloadProgress
+                fun emitDownloadProgress(progress: DownloadStatus.DOWNLOADING) {
+                    currentDownloadProgress = progress
+                    trySend(progress)
+                }
+                //记录当前每个分块下载量
                 val chunkProgress = AtomicLongArray(ranges.size)
                 val totalProgress = AtomicLong(0)
                 val progressLock = Mutex()
@@ -92,8 +98,14 @@ open class MultiChunkDownloadExecutor(
                     val jobs = ranges.mapIndexed { index, (start, end) ->
                         async {
                             //上次的分块进度
-                            val last = lastDownloadProgress?.chunks?.find { it ->
+                            val last = currentDownloadProgress?.chunks?.find { it ->
+                                //fixme: 仅判断index不太保险,万一索引相同,但下载起始位置不同呢?
                                 it.index == index
+                            }
+                            if (last != null) {
+                                chuckProgressMap[index] = last
+                            } else {
+                                chuckProgressMap[index] = ChunkProgress(index, 0, 0, 0)
                             }
                             downloadChunk(
                                 storage = fileStorage,
@@ -116,10 +128,11 @@ open class MultiChunkDownloadExecutor(
                                         val avg = if (totalSec > 0) newTotal / totalSec else 0.0
                                         lastBytes = newTotal
                                         lastTime = now
-                                        val chunks = ranges.mapIndexed { i, (s, e) ->
-                                            ChunkProgress(i, s, e, s + chunkProgress.get(i))
-                                        }
-                                        trySend(
+                                        val nowChuckProgress =
+                                            ChunkProgress(index, start, end, start + chunkProgress.get(index))
+                                        chuckProgressMap[index] = nowChuckProgress
+                                        val chunks = chuckProgressMap.values.sortedBy { it.index }
+                                        emitDownloadProgress(
                                             DownloadStatus.DOWNLOADING(
                                                 length = meta.length,
                                                 progress = newTotal,
@@ -128,6 +141,9 @@ open class MultiChunkDownloadExecutor(
                                                 chunks = chunks,
                                             )
                                         )
+                                    }
+                                    if (isPaused) {
+                                        trySend(DownloadStatus.PAUSED)
                                     }
                                 },
                             )
@@ -212,56 +228,17 @@ open class MultiChunkDownloadExecutor(
                 var pos = start
                 while (source.read(buffer, 0, Constant.COPY_BUFFER_SIZE).also { read = it } != -1) {
                     currentCoroutineContext().ensureActive()
-                    if (isShutdown) break
-                    if (isPaused) pauseSignal.receive()
                     storage.writeAt(pos, buffer, 0, read)
                     pos += read
                     onProgress(read)
+                    if (isPaused) pauseSignal.first { !it }
+                    if (isShutdown) break
                 }
                 // 校验: 本块是否下完
                 if (!isShutdown && pos != end + 1) {
                     throw IOException("分块 #$index 提前结束: 期望到 ${end + 1}, 实际到 $pos")
                 }
             }
-        } finally {
-            con.disconnect()
-        }
-    }
-
-    // ---------- 探测 ----------
-
-    @SuppressLint("NewApi")
-    protected open suspend fun probe(url: String): FileMeta? {
-        val con = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            // 用 Range 探测而不是 HEAD, 因为很多服务器 HEAD 不返回 Accept-Ranges
-            setRequestProperty("Range", "bytes=0-0")
-            setRequestProperty("Accept-Encoding", "identity")
-            readTimeout = Constant.HTTP_TIME_OUT
-            connectTimeout = Constant.HTTP_TIME_OUT
-        }
-        return try {
-            val code = con.responseCode
-            val acceptRanges = con.getHeaderField("Accept-Ranges")?.contains("bytes", ignoreCase = true) == true
-            val length = when (code) {
-                HttpURLConnection.HTTP_PARTIAL -> {
-                    // Content-Range: bytes 0-0/12345
-                    val contentRange = con.getHeaderField("Content-Range")
-                    val total = contentRange?.substringAfterLast('/')?.toLongOrNull()
-                    total ?: con.contentLengthLong
-                }
-
-                HttpURLConnection.HTTP_OK -> con.contentLengthLong
-                else -> return null
-            }
-            if (length <= 0) return null
-            FileMeta(
-                length = length,
-                acceptRanges = acceptRanges || code == HttpURLConnection.HTTP_PARTIAL,
-            )
-        } catch (e: Exception) {
-            LogUtil.e(TAG, "probe error: $e")
-            null
         } finally {
             con.disconnect()
         }
@@ -276,9 +253,4 @@ open class MultiChunkDownloadExecutor(
             start to end
         }
     }
-
-    protected data class FileMeta(
-        val length: Long,
-        val acceptRanges: Boolean,
-    )
 }

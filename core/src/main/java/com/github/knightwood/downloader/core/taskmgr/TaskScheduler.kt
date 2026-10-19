@@ -1,4 +1,4 @@
-package com.github.knightwood.downloader.core.task
+package com.github.knightwood.downloader.core.taskmgr
 
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.model.TaskStatus

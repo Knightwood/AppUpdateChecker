@@ -3,11 +3,13 @@ package com.github.knightwood.downloader.core.executor
 import android.annotation.SuppressLint
 import com.github.knightwood.downloader.core.model.Constant
 import com.github.knightwood.downloader.core.model.DownloadStatus
+import com.github.knightwood.downloader.core.filestorage.FileStorage
 import com.github.knightwood.downloader.core.util.LogUtil
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import okio.buffer
@@ -28,13 +30,14 @@ open class DownloadExecutor(
     protected var lastDownloadProgress: DownloadStatus.DOWNLOADING? = null,
 ) : IDownloadExecutor {
     protected open val TAG = "DownloadExecutor"
-
+    override val isSupportRestoreState: Boolean = false
     @Volatile
     protected open var isShutdown = false
 
-    @Volatile
-    protected open var isPaused = false
-    protected open val pauseSignal = Channel<Unit>(Channel.CONFLATED)
+    protected open val pauseSignal = MutableStateFlow(false)
+    protected open var isPaused
+        set(value) { pauseSignal.value = value }
+        get() = pauseSignal.value
     override fun restoreState(saveState: DownloadStatus.DOWNLOADING): IDownloadExecutor {
         lastDownloadProgress = saveState
         return this
@@ -108,11 +111,9 @@ open class DownloadExecutor(
                         onStatusChanged(DownloadStatus.DOWNLOADING(length, totalBytes))
                         if (isPaused) {
                             onStatusChanged(DownloadStatus.PAUSED)
-                            pauseSignal.receive()
+                            pauseSignal.first { !it }
                         }
-                        if (isShutdown) {
-                            break
-                        }
+                        if (isShutdown) break
                     }
                 }
             }
@@ -158,7 +159,6 @@ open class DownloadExecutor(
 
     override fun resume() {
         isPaused = false
-        pauseSignal.trySend(Unit)
     }
 
     /**

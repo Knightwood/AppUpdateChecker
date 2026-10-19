@@ -1,10 +1,13 @@
 package com.github.knightwood.downloader.core.executor
 
 import com.github.knightwood.downloader.core.model.DownloadStatus
-import com.github.knightwood.downloader.core.model.TaskStatus
+import com.github.knightwood.downloader.core.filestorage.FileStorage
+import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import kotlinx.coroutines.flow.Flow
 
 interface IDownloadExecutor {
+    val isSupportRestoreState: Boolean
     /**
      * 在执行[download]方法下载之前，调用此方法设置上次下载中断的进度
      * ```
@@ -13,6 +16,7 @@ interface IDownloadExecutor {
      * ```
      */
     fun restoreState(saveState: DownloadStatus.DOWNLOADING): IDownloadExecutor = this
+
     /**
      * download apk from apkUrl
      *
@@ -38,4 +42,24 @@ interface IDownloadExecutor {
      */
     fun cancel()
 
+}
+
+object DownloadExecutorFactory {
+    fun create(
+        chunkCount: Int = 1,
+        minChunkSize: Long = Constant.MIN_CHUNK_SIZE,
+        lastDownloadProgress: DownloadStatus.DOWNLOADING? = null,
+    ): IDownloadExecutor {
+        check(chunkCount > 0) { "chunkCount must be > 0" }
+        return if (chunkCount > 1) {
+            MultiChunkDownloadExecutor(chunkCount, minChunkSize, lastDownloadProgress)
+        } else {
+            DownloadExecutor(lastDownloadProgress)
+        }
+    }
+
+    fun create(conf: DownloadTaskConf): IDownloadExecutor {
+        val chunkCount = if (conf.isSupportChunkDownload) conf.chunkCount else 0
+        return create(chunkCount, conf.minChunkSize, null)
+    }
 }

@@ -1,15 +1,8 @@
-package com.github.knightwood.downloader.core.task
+package com.github.knightwood.downloader.core.taskmgr
 
 import com.github.knightwood.downloader.core.model.TaskStatus
+import com.github.knightwood.downloader.core.task.DownloadTask
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.Closeable
 
 class TaskLineCollaborator(
     val scope: CoroutineScope,
@@ -29,7 +22,7 @@ class TaskLineCollaborator(
     }
 
     fun findTask(id: Int): DownloadTask? {
-        return repository.findById(id)
+        return repository.findTaskById(id)
     }
 
     fun close(){

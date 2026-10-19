@@ -1,10 +1,12 @@
 package com.github.knightwood.downloader.core.task
 
-import com.github.knightwood.downloader.core.executor.DownloadExecutor
-import com.github.knightwood.downloader.core.executor.FileStorageImpl
+import com.github.knightwood.downloader.core.executor.DownloadExecutorFactory
 import com.github.knightwood.downloader.core.executor.IDownloadExecutor
-import com.github.knightwood.downloader.core.model.TaskParams
+import com.github.knightwood.downloader.core.filestorage.FileStorage
+import com.github.knightwood.downloader.core.filestorage.FileStorageFactory
+import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import com.github.knightwood.downloader.core.model.DownloadStatus
+import com.github.knightwood.downloader.core.model.DownloadTaskSaveState
 import com.github.knightwood.downloader.core.util.FileUtil
 import com.github.knightwood.downloader.core.util.LogUtil
 import kotlinx.coroutines.CoroutineScope
@@ -17,15 +19,22 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okio.Path.Companion.toOkioPath
-import java.io.File
+import okio.FileSystem
 
-class DownloadTask(
+/**
+ * 1. use [IDownloadExecutor] exec download
+ * 2. collect download status and convert to a hot state flow
+ * 3. provide pause/resume/cancel manage function
+ * 3. provide save/restore downloadState ability(actually it is need IDownloadExecutor supported)
+ */
+open class DownloadTask(
     val id: Int,
-    val conf: TaskParams,
-    val executor: IDownloadExecutor = DownloadExecutor(),
-    val produceFile: () -> File,
+    val conf: DownloadTaskConf,
+    val executorProvider: () -> IDownloadExecutor = { DownloadExecutorFactory.create(conf) },
+    val fileStorageProvider: () -> FileStorage = { FileStorageFactory.create(conf) },
+    val fs: FileSystem = FileSystem.SYSTEM,
 ) {
+    private val executor: IDownloadExecutor by lazy { executorProvider() }
     private val TAG = "DownloadTask#$id"
     private val _stateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow<DownloadStatus>(DownloadStatus.IDLE)
     val stateFlow: StateFlow<DownloadStatus> get() = _stateFlow
@@ -48,6 +57,14 @@ class DownloadTask(
             }
         }
 
+    constructor(saveState: DownloadTaskSaveState) : this(saveState.id, saveState.conf) {
+        runCatching {
+            restoreProgress(saveState.downloadProgress)
+        }.onFailure {
+            LogUtil.e("restoreProgress failed", it)
+        }
+    }
+
     /**
      * 在指定协程作用域上开始新的协程执行下载
      */
@@ -63,21 +80,23 @@ class DownloadTask(
      * 调用此方法将挂起协程直到下载完成
      */
     suspend fun execute() {
-        val cache = conf.md5?.let { FileUtil.findCache(produceFile().toOkioPath(), it) }
+        val cache = conf.md5?.let { FileUtil.findCache(conf.path, it) }
         if (cache != null) {
             _stateFlow.value = DownloadStatus.FINISHED(cache)
             return
         }
-        if (conf.deleteLastFile) {
-            produceFile().delete()
+        if (conf.isDeleteLastFile) {
+            fs.delete(conf.path)
         }
-        executor.download(FileStorageImpl(produceFile), conf.url)
-            .collect { state ->
-                _stateFlow.value = state
-                if (state is DownloadStatus.DOWNLOADING) {
-                    lastDownloadingStatus = state
-                }
+        executor.download(
+            fileStorage = fileStorageProvider(),
+            url = conf.url
+        ).collect { state ->
+            _stateFlow.value = state
+            if (state is DownloadStatus.DOWNLOADING) {
+                lastDownloadingStatus = state
             }
+        }
     }
 
     /**
@@ -115,31 +134,38 @@ class DownloadTask(
 
     /**
      * 需要保存下载进度时可调用此方法获取最后的下载进度
-     * @return 如果任务处于idle/starting状态，可能返回null
+     * @return 如果任务处于idle/starting状态，下载进度可能为null
      */
-    fun saveState(): DownloadStatus.DOWNLOADING? {
+    fun saveState(): DownloadTaskSaveState {
         if (isDownloading) {
             throw IllegalStateException("需停止/取消/暂停下载任务后调用此方法")
         }
-        return lastDownloadingStatus
+        return DownloadTaskSaveState(id = id, conf = conf, lastDownloadingStatus)
     }
 
     /**
      * 在执行[runOn]、[execute]之前调用此方法恢复任务进度
-     * 只有分块下载时有用
      *
      * ```
-     * val task = DownloadTask()
-     * task.resumeFrom(state)
+     * val snap = oldTask.saveState() //从旧任务中保存快照
+     * val task = DownloadTask(snap.id,snap.conf) //利用快照生成新任务
+     * task.restoreProgress(snap.downloadProgress) //恢复任务进度
      *     .execute()
      * ```
      */
-    fun restoreState(state: DownloadStatus.DOWNLOADING): DownloadTask {
+    fun restoreProgress(state: DownloadStatus.DOWNLOADING?): DownloadTask {
+        if (state == null) {
+            return this
+        }
         if (!isIdle) {
             throw IllegalStateException("only in IDLE state can be resumed.")
         }
-        executor.restoreState(state)
-        conf.deleteLastFile = false
+        if (executor.isSupportRestoreState) {
+            executor.restoreState(state)
+            conf.isDeleteLastFile = false
+        } else {
+            throw IllegalStateException("doesn't support restore state.")
+        }
         return this
     }
 }
