@@ -13,7 +13,7 @@ import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.listener.OnButtonClickListener
 import com.github.knightwood.downloader.core.listener.OnDownloadListener
 import com.github.knightwood.downloader.core.manager.DownloadManager
@@ -300,7 +300,7 @@ class BaseUpdateDialogViewModel : ViewModel() {
 
     fun installApk(context: Context) {
         apkFile?.let { it1 ->
-            ApkUtil.installApk(context, Constant.AUTHORITIES!!, it1)
+            ApkUtil.installApk(context, HttpConstant.AUTHORITIES!!, it1)
         }
     }
 

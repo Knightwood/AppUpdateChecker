@@ -1,4 +1,4 @@
-package com.github.knightwood.downloader.core.util
+package com.github.knightwood.downloader.core.android.util
 
 import android.content.Context
 

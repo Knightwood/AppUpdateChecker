@@ -12,7 +12,7 @@ import androidx.core.app.ServiceCompat
 import com.github.knightwood.downloader.core.Downloader
 import com.github.knightwood.downloader.core.model.TaskDesc
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
-import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.executor.DownloadExecutor
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.task.DownloadTask
@@ -32,7 +32,7 @@ import kotlin.time.Duration.Companion.seconds
 
 class DownloadService : Service() {
     private val scope: CoroutineScope =
-        CoroutineScope(Dispatchers.IO) + SupervisorJob() + CoroutineName(Constant.COROUTINE_NAME)
+        CoroutineScope(Dispatchers.IO) + SupervisorJob() + CoroutineName(HttpConstant.COROUTINE_NAME)
     private var bomb: Job? = null
     private val confMap: MutableMap<Int, TaskDesc> = mutableMapOf()
     private val taskCollaborator: TaskLineCollaborator = TaskLineCollaborator(scope)
@@ -115,7 +115,7 @@ class DownloadService : Service() {
             ),
             produceFile = {
                 val path = this@DownloadService.externalCacheDir!!.toOkioPath()
-                    .resolve(conf.taskImI.saveRelativePath ?: Constant.CACHE_DIR_NAME)
+                    .resolve(conf.taskImI.saveRelativePath ?: HttpConstant.CACHE_DIR_NAME)
                 path.toFile()
             }
         )

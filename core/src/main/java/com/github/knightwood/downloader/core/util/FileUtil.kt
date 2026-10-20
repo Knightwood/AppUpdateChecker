@@ -2,14 +2,15 @@ package com.github.knightwood.downloader.core.util
 
 import okio.FileSystem
 import okio.Path
-import okio.Path.Companion.toOkioPath
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileInputStream
 import java.math.BigInteger
 import java.security.MessageDigest
 
 object FileUtil {
-    private val TAG = "FileUtil"
+    private val logger = LoggerFactory.getLogger("FileUtil")
+
     fun md5(file: File): String {
         try {
             val buffer = ByteArray(1024)
@@ -23,7 +24,7 @@ object FileUtil {
             val bigInt = BigInteger(1, digest.digest())
             return bigInt.toString(16).padStart(32, '0').uppercase()
         } catch (e: Exception) {
-            LogUtil.e(TAG,e)
+            logger.error("calc md5 failed", e)
         }
         return ""
     }
@@ -44,8 +45,8 @@ object FileUtil {
                     }
                 }
             }
-        }.onFailure {
-            LogUtil.e(TAG, "findCache: $it")
+        }.onFailure { e ->
+            logger.error("findCache failed", e)
         }.getOrNull()
     }
 
@@ -63,3 +64,20 @@ object FileUtil {
     }
 }
 
+
+/**
+ * 根据字节数转换成易阅读的单位格式
+ */
+val Long?.toDataUnit: String?
+    get() {
+        if (this == null) {
+            return null
+        }
+        if (this < 1024) {
+            return "${this}B"
+        }
+        if (this < 1024 * 1024) {
+            return "${this / 1024}KB"
+        }
+        return "${this / 1024 / 1024}MB"
+    }

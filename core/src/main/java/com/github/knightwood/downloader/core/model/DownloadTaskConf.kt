@@ -1,5 +1,6 @@
 package com.github.knightwood.downloader.core.model
 
+import com.github.knightwood.downloader.core.util.HttpConstant
 import okio.Path
 import okio.Path.Companion.toPath
 import java.util.UUID
@@ -36,7 +37,7 @@ data class DownloadTaskConf(
     /**
      * 最小分块大小,单位byte
      */
-    val minChunkSize: Long = Constant.MIN_CHUNK_SIZE,
+    val minChunkSize: Long = HttpConstant.MIN_CHUNK_SIZE,
 ) {
     /**
      * 文件路径

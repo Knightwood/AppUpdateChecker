@@ -6,7 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.util.ApkUtil
 import com.github.knightwood.downloader.core.R
@@ -26,10 +26,10 @@ interface INotifier {
 }
 
 open class BasicNotifierImpl : INotifier {
-    override val CHANNEL_ID: String = Constant.DEFAULT_CHANNEL_ID
-    override val CHANNEL_NAME: String = Constant.DEFAULT_CHANNEL_NAME
-    override val CHANNEL_DESC: String = Constant.DEFAULT_CHANNEL_DESC
-    override val NOTIFY_ID: Int = Constant.DEFAULT_NOTIFY_ID
+    override val CHANNEL_ID: String = HttpConstant.DEFAULT_CHANNEL_ID
+    override val CHANNEL_NAME: String = HttpConstant.DEFAULT_CHANNEL_NAME
+    override val CHANNEL_DESC: String = HttpConstant.DEFAULT_CHANNEL_DESC
+    override val NOTIFY_ID: Int = HttpConstant.DEFAULT_NOTIFY_ID
 
     override fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

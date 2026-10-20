@@ -16,7 +16,7 @@ import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.listener.OnButtonClickListener
 import com.github.knightwood.downloader.core.listener.OnDownloadListenerAdapter
 import com.github.knightwood.downloader.core.manager.DownloadManager
@@ -165,7 +165,7 @@ class UpdateDialogActivity : AppCompatActivity(), View.OnClickListener {
 
             R.id.app_update_btn_update -> {
                 if (btnUpdate.tag == install) {
-                    ApkUtil.installApk(this, Constant.AUTHORITIES!!, apk)
+                    ApkUtil.installApk(this, HttpConstant.AUTHORITIES!!, apk)
                     return
                 }
                 if (!checkPermission()) {

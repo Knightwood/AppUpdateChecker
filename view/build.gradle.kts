@@ -39,5 +39,5 @@ dependencies {
     implementation(libs.androidx.appCompat)
     implementation(libs.androidx.core.ktx)
     implementation(libs.google.material)
-    compileOnly(project(":core"))
+    compileOnly(project(":core-android"))
 }

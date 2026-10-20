@@ -36,6 +36,10 @@ kotlin-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-j
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity_compose_version" }
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 
+slf4j-api = { module = "org.slf4j:slf4j-api", version = "2.0.15" }
+slf4j-api-kotlin = { module = "com.github.knightwood:slf4j-api-kotlin", version = "0.0.7" }
+
+
 [plugins]
 # application和library插件
 application = { id = "com.android.application", version.ref = "agp" }

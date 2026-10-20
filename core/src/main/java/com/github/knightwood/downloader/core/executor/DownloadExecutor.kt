@@ -1,10 +1,8 @@
 package com.github.knightwood.downloader.core.executor
 
-import android.annotation.SuppressLint
-import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.filestorage.FileStorage
-import com.github.knightwood.downloader.core.util.LogUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +12,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import okio.buffer
 import okio.source
+import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
@@ -29,15 +28,19 @@ import javax.net.ssl.X509TrustManager
 open class DownloadExecutor(
     protected var lastDownloadProgress: DownloadStatus.DOWNLOADING? = null,
 ) : IDownloadExecutor {
-    protected open val TAG = "DownloadExecutor"
+    private val logger = LoggerFactory.getLogger(DownloadExecutor::class.java)
     override val isSupportRestoreState: Boolean = false
+
     @Volatile
     protected open var isShutdown = false
 
     protected open val pauseSignal = MutableStateFlow(false)
     protected open var isPaused
-        set(value) { pauseSignal.value = value }
+        set(value) {
+            pauseSignal.value = value
+        }
         get() = pauseSignal.value
+
     override fun restoreState(saveState: DownloadStatus.DOWNLOADING): IDownloadExecutor {
         lastDownloadProgress = saveState
         return this
@@ -56,11 +59,10 @@ open class DownloadExecutor(
         }.flowOn(Dispatchers.IO)
     }
 
-    @SuppressLint("NewApi")
     protected open suspend fun parseUrlExecDownload(
         fileStorage: FileStorage,
         url: String,
-        maxRedirects: Int = Constant.MAX_REDIRECTS,
+        maxRedirects: Int = HttpConstant.MAX_REDIRECTS,
         onStatusChanged: suspend (DownloadStatus) -> Unit,
     ) {
         if (maxRedirects <= 0) {
@@ -70,14 +72,14 @@ open class DownloadExecutor(
         val con = URL(url).openConnection() as HttpURLConnection
         con.apply {
             requestMethod = "GET"
-            readTimeout = Constant.HTTP_TIME_OUT
-            connectTimeout = Constant.HTTP_TIME_OUT
+            readTimeout = HttpConstant.HTTP_TIME_OUT
+            connectTimeout = HttpConstant.HTTP_TIME_OUT
             setRequestProperty("Accept-Encoding", "identity")
         }
         if (con.responseCode == HttpURLConnection.HTTP_OK) {
             //下载
             val length = con.contentLengthLong
-            val buffer = ByteArray(Constant.COPY_BUFFER_SIZE)
+            val buffer = ByteArray(HttpConstant.COPY_BUFFER_SIZE)
             var totalBytes = 0L
             var read: Int
 
@@ -88,7 +90,7 @@ open class DownloadExecutor(
 
             fileStorage.use { storage: FileStorage ->
                 con.inputStream.source().buffer().use { source ->
-                    while (source.read(buffer, 0, Constant.COPY_BUFFER_SIZE).also { read = it } != -1) {
+                    while (source.read(buffer, 0, HttpConstant.COPY_BUFFER_SIZE).also { read = it } != -1) {
 
                         storage.write(buffer, read)
                         totalBytes += read
@@ -135,10 +137,7 @@ open class DownloadExecutor(
                 return
             }
             val next = if (location.startsWith("http")) location else URL(URL(url), location).toString()
-            LogUtil.d(
-                TAG,
-                "The current url is the redirect Url, the redirected url is $next"
-            )
+            logger.debug("The current url is the redirect Url, the redirected url is $next")
             parseUrlExecDownload(fileStorage, next, maxRedirects - 1, onStatusChanged)
 //            if (isShutdown) { provideStatus(DownloadStatus.CANCELED); return }
         } else {
@@ -171,11 +170,11 @@ open class DownloadExecutor(
             }
 
             override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-                LogUtil.d(TAG, "checkClientTrusted")
+                logger.debug("checkClientTrusted")
             }
 
             override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-                LogUtil.d(TAG, "checkServerTrusted")
+                logger.debug("checkServerTrusted")
             }
         }
         try {
@@ -183,7 +182,7 @@ open class DownloadExecutor(
             sslContext.init(null, arrayOf(manager), SecureRandom())
             HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.socketFactory)
         } catch (e: Exception) {
-            LogUtil.e(TAG, "trustAllHosts error: $e")
+            logger.error("trustAllHosts error: ${e.message}", e)
         }
     }
 

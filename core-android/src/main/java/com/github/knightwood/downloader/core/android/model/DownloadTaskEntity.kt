@@ -1,4 +1,4 @@
-package com.github.knightwood.downloader.core.model
+package com.github.knightwood.downloader.core.android.model
 
 import okio.Path
 

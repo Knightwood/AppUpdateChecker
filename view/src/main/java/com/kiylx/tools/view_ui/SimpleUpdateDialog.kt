@@ -8,7 +8,7 @@ import android.view.Window
 import android.widget.Button
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.drawable.DrawableCompat
-import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.listener.OnButtonClickListener
 import com.github.knightwood.downloader.core.listener.OnDownloadListener
 import com.github.knightwood.downloader.core.manager.DownloadManager
@@ -167,7 +167,7 @@ class SimpleUpdateDialog {
                             }
                             apkFile?.let { it1 ->
                                 dismiss()
-                                ApkUtil.installApk(activity, Constant.AUTHORITIES!!, it1)
+                                ApkUtil.installApk(activity, HttpConstant.AUTHORITIES!!, it1)
                             }
                         } else {
                             //下载

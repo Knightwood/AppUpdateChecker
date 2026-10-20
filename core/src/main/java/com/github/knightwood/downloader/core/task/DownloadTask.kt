@@ -7,8 +7,8 @@ import com.github.knightwood.downloader.core.filestorage.FileStorageFactory
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.model.DownloadTaskSaveState
+import com.github.knightwood.downloader.core.model.TaskQueueType
 import com.github.knightwood.downloader.core.util.FileUtil
-import com.github.knightwood.downloader.core.util.LogUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okio.FileSystem
+import org.slf4j.LoggerFactory
 
 /**
  * 1. use [IDownloadExecutor] exec download
@@ -35,12 +36,12 @@ open class DownloadTask(
     val fs: FileSystem = FileSystem.SYSTEM,
 ) {
     private val executor: IDownloadExecutor by lazy { executorProvider() }
-    private val TAG = "DownloadTask#$id"
+    private val logger = LoggerFactory.getLogger("DownloadTask#$id")
     private val _stateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow<DownloadStatus>(DownloadStatus.IDLE)
     val stateFlow: StateFlow<DownloadStatus> get() = _stateFlow
+//    val queueStateFlow: Flow<TaskStatus> = _stateFlow.map { value ->
 
-    //最后的下载状态
-    private var lastDownloadingStatus: DownloadStatus.DOWNLOADING? = null
+//    }
 
     //当前下载进度
     val progress: Flow<Double> = _stateFlow
@@ -50,18 +51,21 @@ open class DownloadTask(
                 val max = status.length
                 val progress = status.progress
                 val curr = (progress / max * 100.0)
-                LogUtil.i(TAG, "downloading max: $max --- progress: $progress")
+                logger.debug("downloading max: $max --- progress: $progress")
                 curr
             } else {
                 0.0
             }
         }
 
+    //最后的下载进度
+    private var currentDownloadingProgress: DownloadStatus.DOWNLOADING? = null
+
     constructor(saveState: DownloadTaskSaveState) : this(saveState.id, saveState.conf) {
         runCatching {
-            restoreProgress(saveState.downloadProgress)
+            restoreProgress(saveState.progress)
         }.onFailure {
-            LogUtil.e("restoreProgress failed", it)
+            logger.error("restoreProgress failed", it)
         }
     }
 
@@ -94,7 +98,7 @@ open class DownloadTask(
         ).collect { state ->
             _stateFlow.value = state
             if (state is DownloadStatus.DOWNLOADING) {
-                lastDownloadingStatus = state
+                currentDownloadingProgress = state
             }
         }
     }
@@ -104,9 +108,11 @@ open class DownloadTask(
      * 调用此方法后会立即挂起协程, 直到任务状态被更新到[DownloadStatus.PAUSED]
      */
     suspend fun pause() {
-        executor.pause()
-        _stateFlow.first { status ->
-            status is DownloadStatus.PAUSED
+        if (isDownloading) {
+            executor.pause()
+            _stateFlow.first { status ->
+                status is DownloadStatus.PAUSED
+            }
         }
     }
 
@@ -115,9 +121,11 @@ open class DownloadTask(
      * 调用此方法后会立即挂起协程, 直到任务状态被更新到[DownloadStatus.DOWNLOADING]
      */
     suspend fun resume() {
-        executor.resume()
-        _stateFlow.first { status ->
-            status is DownloadStatus.DOWNLOADING
+        if (isPaused) {
+            executor.resume()
+            _stateFlow.first { status ->
+                status is DownloadStatus.DOWNLOADING
+            }
         }
     }
 
@@ -140,7 +148,11 @@ open class DownloadTask(
         if (isDownloading) {
             throw IllegalStateException("需停止/取消/暂停下载任务后调用此方法")
         }
-        return DownloadTaskSaveState(id = id, conf = conf, lastDownloadingStatus)
+        return DownloadTaskSaveState(
+            id = id, conf = conf,
+            progress = currentDownloadingProgress,
+            finalState = _stateFlow.value
+        )
     }
 
     /**
@@ -153,15 +165,15 @@ open class DownloadTask(
      *     .execute()
      * ```
      */
-    fun restoreProgress(state: DownloadStatus.DOWNLOADING?): DownloadTask {
-        if (state == null) {
+    fun restoreProgress(progress: DownloadStatus.DOWNLOADING?): DownloadTask {
+        if (progress == null) {
             return this
         }
         if (!isIdle) {
             throw IllegalStateException("only in IDLE state can be resumed.")
         }
         if (executor.isSupportRestoreState) {
-            executor.restoreState(state)
+            executor.restoreState(progress)
             conf.isDeleteLastFile = false
         } else {
             throw IllegalStateException("doesn't support restore state.")
@@ -175,3 +187,20 @@ val DownloadTask.isDownloading get() = stateFlow.value is DownloadStatus.DOWNLOA
 val DownloadTask.isPaused get() = stateFlow.value is DownloadStatus.PAUSED
 val DownloadTask.isFailed get() = stateFlow.value is DownloadStatus.ERROR
 val DownloadTask.isCancelled get() = stateFlow.value is DownloadStatus.CANCELED
+
+/**
+ * 此方法根据任务当前状态映射成任务所处队列类型.
+ *
+ * 每个任务状态可以唯一对应一个队列类型, 以表示当前下载状态的任务处于什么类型的下载队列.
+ * 映射结果并不100%准确, 比如IDLE/STARTING/DOWNLOADING等下载状态的任务都有可能处于等待下载队列.
+ */
+fun DownloadStatus.mapping2QueueType() =
+    when (this) {
+        DownloadStatus.IDLE -> TaskQueueType.QUEUED
+        DownloadStatus.STARTING -> TaskQueueType.RUNNING
+        is DownloadStatus.DOWNLOADING -> TaskQueueType.RUNNING
+        DownloadStatus.PAUSED -> TaskQueueType.PAUSED
+        DownloadStatus.CANCELED -> TaskQueueType.CANCELED
+        is DownloadStatus.FINISHED -> TaskQueueType.FINISHED
+        is DownloadStatus.ERROR -> TaskQueueType.FAILED
+    }

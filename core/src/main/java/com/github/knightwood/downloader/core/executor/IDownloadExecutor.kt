@@ -2,7 +2,7 @@ package com.github.knightwood.downloader.core.executor
 
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.filestorage.FileStorage
-import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import kotlinx.coroutines.flow.Flow
 
@@ -47,7 +47,7 @@ interface IDownloadExecutor {
 object DownloadExecutorFactory {
     fun create(
         chunkCount: Int = 1,
-        minChunkSize: Long = Constant.MIN_CHUNK_SIZE,
+        minChunkSize: Long = HttpConstant.MIN_CHUNK_SIZE,
         lastDownloadProgress: DownloadStatus.DOWNLOADING? = null,
     ): IDownloadExecutor {
         check(chunkCount > 0) { "chunkCount must be > 0" }

@@ -1,13 +1,11 @@
 package com.github.knightwood.downloader.core.executor
 
-import android.annotation.SuppressLint
 import com.github.knightwood.downloader.core.filestorage.FileStorage
 import com.github.knightwood.downloader.core.filestorage.RandomAccessFileStorageImpl
 import com.github.knightwood.downloader.core.model.ChunkProgress
-import com.github.knightwood.downloader.core.model.Constant
+import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.util.HttpConnectionUtils
-import com.github.knightwood.downloader.core.util.LogUtil
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +15,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import okio.buffer
 import okio.source
+import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -31,17 +30,17 @@ import java.util.concurrent.atomic.AtomicLongArray
  * - 每个分块可独立报告进度, 支持断点续传 (通过 [ChunkProgress.downloaded])。
  */
 open class MultiChunkDownloadExecutor(
-    protected val chunkCount: Int = Constant.DEFAULT_CHUNK_COUNT,
-    protected val minChunkSize: Long = Constant.MIN_CHUNK_SIZE,
+    protected val chunkCount: Int = HttpConstant.DEFAULT_CHUNK_COUNT,
+    protected val minChunkSize: Long = HttpConstant.MIN_CHUNK_SIZE,
     lastDownloadProgress: DownloadStatus.DOWNLOADING? = null,
 ) : DownloadExecutor(lastDownloadProgress) {
     override val isSupportRestoreState: Boolean = true
-    override val TAG: String = "MultiChunkDownloadExecutor"
+    private val logger = LoggerFactory.getLogger(MultiChunkDownloadExecutor::class.java)
 
     override fun download(fileStorage: FileStorage, url: String): Flow<DownloadStatus> {
         // 分块下载必须使用支持随机写的 storage
         if (fileStorage !is RandomAccessFileStorageImpl) {
-            LogUtil.w(TAG, "fileStorage 不是 RandomAccessFileStorageImpl, 退化为单连接下载")
+            logger.warn( "fileStorage 不是 RandomAccessFileStorageImpl, 退化为单连接下载")
             return super.download(fileStorage, url)
         }
         return chunkFlow(fileStorage, url).flowOn(Dispatchers.IO)
@@ -63,7 +62,7 @@ open class MultiChunkDownloadExecutor(
                 }
 
                 if (!meta.acceptRanges || meta.length < minChunkSize || chunkCount <= 1) {
-                    LogUtil.d(TAG, "退化为单连接下载 (acceptRanges=${meta.acceptRanges}, length=${meta.length})")
+                    logger.debug( "退化为单连接下载 (acceptRanges=${meta.acceptRanges}, length=${meta.length})")
                     // 直接复用父类逻辑: 需要把 storage 转成普通 FileStorage 语义即可
                     // 但这里已经在 channelFlow 里, 不能直接调 super.download
                     // 用 downloadSingle 把父类的 saveDownloadData 逻辑跑一遍
@@ -73,7 +72,7 @@ open class MultiChunkDownloadExecutor(
 
                 // 1) 规划分块
                 val ranges = planChunks(meta.length)
-                LogUtil.d(TAG, "分块下载: length=${meta.length}, chunks=${ranges.size}")
+                logger.debug( "分块下载: length=${meta.length}, chunks=${ranges.size}")
 
                 // 2) 进度统计
                 //记录此次下载的分块进度状态
@@ -173,12 +172,11 @@ open class MultiChunkDownloadExecutor(
     /**
      * 单连接下载 (退化为父类逻辑, 但复用了 [RandomAccessFileStorageImpl])。
      */
-    @SuppressLint("NewApi")
     private suspend fun downloadSingle(
         fileStorage: FileStorage,
         url: String,
         flow: ProducerScope<DownloadStatus>,
-        maxRedirects: Int = Constant.MAX_REDIRECTS,
+        maxRedirects: Int = HttpConstant.MAX_REDIRECTS,
     ) {
         super.parseUrlExecDownload(fileStorage, url, maxRedirects) {
             flow.send(it)
@@ -206,8 +204,8 @@ open class MultiChunkDownloadExecutor(
             requestMethod = "GET"
             setRequestProperty("Range", "bytes=$start-$end")
             setRequestProperty("Accept-Encoding", "identity")
-            readTimeout = Constant.HTTP_TIME_OUT
-            connectTimeout = Constant.HTTP_TIME_OUT
+            readTimeout = HttpConstant.HTTP_TIME_OUT
+            connectTimeout = HttpConstant.HTTP_TIME_OUT
         }
         try {
             val code = con.responseCode
@@ -222,11 +220,11 @@ open class MultiChunkDownloadExecutor(
                 throw IOException("服务端不支持 Range, 分块 #$index 收到 200")
             }
 
-            val buffer = ByteArray(Constant.COPY_BUFFER_SIZE)
+            val buffer = ByteArray(HttpConstant.COPY_BUFFER_SIZE)
             var read: Int
             con.inputStream.source().buffer().use { source ->
                 var pos = start
-                while (source.read(buffer, 0, Constant.COPY_BUFFER_SIZE).also { read = it } != -1) {
+                while (source.read(buffer, 0, HttpConstant.COPY_BUFFER_SIZE).also { read = it } != -1) {
                     currentCoroutineContext().ensureActive()
                     storage.writeAt(pos, buffer, 0, read)
                     pos += read

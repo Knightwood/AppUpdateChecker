@@ -1,8 +1,8 @@
 package com.github.knightwood.downloader.core.taskmgr
 
-import com.github.knightwood.downloader.core.model.DownloadStatus
-import com.github.knightwood.downloader.core.model.TaskStatus
-import com.github.knightwood.downloader.core.util.LogUtil
+import com.github.knightwood.downloader.core.model.TaskQueueType
+import com.github.knightwood.downloader.core.task.DownloadTask
+import com.github.knightwood.downloader.core.task.mapping2QueueType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -12,22 +12,52 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.slf4j.LoggerFactory
+import java.lang.Runnable
 import kotlin.coroutines.cancellation.CancellationException
+import com.github.knightwood.downloader.core.model.*
 
 class TaskScheduler(
     private val scope: CoroutineScope,
-    private val repo: TaskRepository = TaskRepository(),
-    private val maxParallel: Int = 3,
-) {
+    private val maxParallel: Int = 8,
+) : Runnable {
+    private val logger = LoggerFactory.getLogger(TaskScheduler::class.java)
     private val mutex = Mutex()
-    private val TAG = "TaskScheduler"
 
-    // 用 ArrayDeque 而不是 Channel, 支持随机删除
+    // 所有任务, id -> DownloadTask
+    private val all = LinkedHashMap<Int, DownloadTask>()
+
+    // 等待队列, 用 ArrayDeque 而不是 Channel, 支持随机删除
     private val pending = ArrayDeque<Int>()
     private val waitSignal = Channel<Unit>(Channel.CONFLATED)
 
+    // 正在执行的下载任务
     private var workers: List<Job> = emptyList()
 
+    /**
+     * 查找某队列状态下的所有任务
+     *
+     * 除了等待下载队列, 其余队列均可根据任务的下载状态确定,
+     * 我们使用[pending]记录处于等待下载状态的任务列表，
+     * 其余队列类型[TaskQueueType]所含任务, 需根据任务的下载状态[DownloadStatus]实时筛选
+     *
+     */
+    fun tasksIn(status: TaskQueueType): List<DownloadTask> {
+        val arr = if (status == TaskQueueType.QUEUED) {
+            pending.mapNotNull { id -> all[id] }
+        } else {
+            //筛选处于目标队列类型的任务集合
+            all.values.toList().filter { task ->
+                // 根据任务当前状态映射成任务所处队列类型, 筛选出处于要查找队列类型的任务
+                // IDLE/STARTING/DOWNLOADING状态任务都有可能在等待队列中排队, 需剔除已在等待队列中的任务
+                task.stateFlow.value.mapping2QueueType() == status && (task.id !in pending)
+            }
+        }
+        return arr
+    }
+
+
+    override fun run() = start()
     fun start() {
         if (workers.isNotEmpty()) return
         workers = (0 until maxParallel).map {
@@ -45,11 +75,37 @@ class TaskScheduler(
         // 跳过已被取消/移除的
         while (pending.isNotEmpty()) {
             val id = pending.removeFirst()
-            if (repo.statusOf(id) == TaskStatus.QUEUED) return id
+            return id
         }
         null
     }
 
+    private suspend fun runTask(id: Int) {
+        try {
+            val task = all[id]!!
+            coroutineScope {
+                task.execute()   // 内部把最终状态回写 repo
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            logger.error("task failed", e)
+        }
+    }
+
+    //<editor-fold desc="任务交互">
+
+    /**
+     * 提交新的下载任务
+     */
+    suspend fun submit(task: DownloadTask) {
+        all[task.id] = task
+        enqueue(task.id)
+    }
+
+    /**
+     * 将任务添加到等待队列, 等待下载
+     */
     suspend fun enqueue(id: Int) {
         val added = mutex.withLock {
             if (id in pending) false else {
@@ -57,49 +113,52 @@ class TaskScheduler(
             }
         }
         if (!added) return
-        repo.transition(id, TaskStatus.IDLE, TaskStatus.QUEUED)
         waitSignal.trySend(Unit)
     }
 
-    /** 立即删除：排队中就真删；执行中走 task.cancel() */
+    /**
+     * 取消任务下载:
+     * 1. 立即从等待队列中删除任务, 避免开始下载
+     * 2. 若任务已在执行, 调用 task.cancel() 取消下载
+     */
     suspend fun cancel(id: Int) {
         val removed = mutex.withLock { pending.remove(id) }
-        if (removed) {
-            repo.transition(id, TaskStatus.QUEUED, TaskStatus.CANCELED)
+        if (removed) { //还在排队, 从等待队列移除后直接返回即可
             return
         }
-        // 正在执行
-        repo.tasksIn(TaskStatus.RUNNING).find { it.id == id }?.cancel()
+        // 正在执行的,需要取消下载
+        all[id]?.cancel()
     }
 
-    private suspend fun runTask(id: Int) {
-        val task = repo.tasksIn(TaskStatus.QUEUED).find { it.id == id } ?: return
-        repo.transition(id, TaskStatus.QUEUED, TaskStatus.RUNNING)
-        try {
-            coroutineScope {
-                launch(Dispatchers.IO) {
-                    task.stateFlow.collect { state ->
-                        when (state) {
-                            is DownloadStatus.FINISHED -> repo.transition(id, TaskStatus.RUNNING, TaskStatus.FINISHED)
-                            is DownloadStatus.ERROR -> repo.transition(id, TaskStatus.RUNNING, TaskStatus.FAILED)
-                            is DownloadStatus.CANCELED -> repo.transition(id, TaskStatus.RUNNING, TaskStatus.CANCELED)
-                            else -> Unit
-                        }
-                    }
-                }
-                task.execute()   // 内部把最终状态回写 repo
-            }
-        } catch (e: CancellationException) {
-            repo.transition(id, TaskStatus.RUNNING, TaskStatus.CANCELED)
-        } catch (e: Throwable) {
-            repo.transition(id, TaskStatus.RUNNING, TaskStatus.FAILED)
-            LogUtil.e(TAG, e)
-        }
+    /**
+     * 删除某任务
+     */
+    suspend fun delete(id: Int) {
+        cancel(id)
+        all.remove(id)
     }
+
+    //</editor-fold>
 
     fun stop() {
         workers.forEach { it.cancel() }
         workers = emptyList()
         waitSignal.close()
     }
+
+//    /**
+//     * 导出全部任务的下载状态/进度
+//     */
+//    suspend fun saveState(): List<TaskSaveState> {
+//        return all.map { (key, value) ->
+//            TaskSaveState(key, statusOf(key), value.saveState())
+//        }
+//    }
+//
+//    suspend fun restoreState(saveStates: List<TaskSaveState>, tasks: List<DownloadTask>) {
+//        val idTaskMap = tasks.associateBy { task -> task.id }
+//        saveStates.forEach { saveState ->
+//
+//        }
+//    }
 }

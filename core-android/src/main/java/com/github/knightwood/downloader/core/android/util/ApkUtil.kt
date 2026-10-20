@@ -1,13 +1,11 @@
-package com.github.knightwood.downloader.core.util
+package com.github.knightwood.downloader.core.android.util
 
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.util.Log
 import androidx.core.content.FileProvider
-import com.github.knightwood.downloader.core.model.Constant
 import java.io.File
 
 
