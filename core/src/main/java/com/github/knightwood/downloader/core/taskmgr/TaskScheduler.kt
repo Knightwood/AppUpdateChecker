@@ -16,11 +16,13 @@ import org.slf4j.LoggerFactory
 import java.lang.Runnable
 import kotlin.coroutines.cancellation.CancellationException
 import com.github.knightwood.downloader.core.model.*
+import com.github.knightwood.downloader.core.task.currentStatus
+import java.io.Closeable
 
 class TaskScheduler(
     private val scope: CoroutineScope,
     private val maxParallel: Int = 8,
-) : Runnable {
+) : Runnable, Closeable {
     private val logger = LoggerFactory.getLogger(TaskScheduler::class.java)
     private val mutex = Mutex()
 
@@ -49,20 +51,23 @@ class TaskScheduler(
             //筛选处于目标队列类型的任务集合
             all.values.toList().filter { task ->
                 // 根据任务当前状态映射成任务所处队列类型, 筛选出处于要查找队列类型的任务
-                // IDLE/STARTING/DOWNLOADING状态任务都有可能在等待队列中排队, 需剔除已在等待队列中的任务
-                task.stateFlow.value.mapping2QueueType() == status && (task.id !in pending)
+                // IDLE/FAILED/CANCELED状态任务都有可能在等待队列中排队等待下载, 它们算作TaskQueueType.QUEUED,不算作要查找的目标队列类型，因此需剔除已在等待队列中的任务
+                task.currentStatus.mapping2QueueType() == status && (task.id !in pending)
             }
         }
         return arr
     }
 
-
-    override fun run() = start()
-    fun start() {
+    /**
+     * 产生[maxParallel]个work协程，不间断的听从waitSignal信号，从[pending]队列中取出任务并开始执行
+     * 注意：
+     * 暂停下载中的任务，在协程看来任务的execute方法没有结束，此状态下works中的协程无法选择一个等待队列中的任务执行
+     */
+    override fun run() {
         if (workers.isNotEmpty()) return
         workers = (0 until maxParallel).map {
             scope.launch(Dispatchers.IO) {
-                while (isActive) {
+                while (true) {
                     waitSignal.receive()                     // 等到有任务
                     val id = nextTask() ?: continue          // 取一个
                     runTask(id)
@@ -84,7 +89,7 @@ class TaskScheduler(
         try {
             val task = all[id]!!
             coroutineScope {
-                task.execute()   // 内部把最终状态回写 repo
+                task.execute()
             }
         } catch (e: CancellationException) {
             throw e
@@ -104,7 +109,7 @@ class TaskScheduler(
     }
 
     /**
-     * 将任务添加到等待队列, 等待下载
+     * 将已存在任务添加到等待队列, 等待下载
      */
     suspend fun enqueue(id: Int) {
         val added = mutex.withLock {
@@ -140,25 +145,33 @@ class TaskScheduler(
 
     //</editor-fold>
 
-    fun stop() {
+    override fun close() {
         workers.forEach { it.cancel() }
         workers = emptyList()
         waitSignal.close()
     }
 
-//    /**
-//     * 导出全部任务的下载状态/进度
-//     */
-//    suspend fun saveState(): List<TaskSaveState> {
-//        return all.map { (key, value) ->
-//            TaskSaveState(key, statusOf(key), value.saveState())
-//        }
-//    }
-//
-//    suspend fun restoreState(saveStates: List<TaskSaveState>, tasks: List<DownloadTask>) {
-//        val idTaskMap = tasks.associateBy { task -> task.id }
-//        saveStates.forEach { saveState ->
-//
-//        }
-//    }
+    /**
+     * 导出全部任务的下载状态/进度
+     */
+    suspend fun saveState(): TaskSchedulerSaveState {
+        val allTaskSaveState = all.map { (key, value) ->
+            value.saveState()
+        }
+        return TaskSchedulerSaveState(pending.toIntArray(), allTaskSaveState)
+    }
+
+    suspend fun restoreState(
+        saveStates: TaskSchedulerSaveState,
+        taskProvider: (DownloadTaskSaveState) -> DownloadTask = {
+            DownloadTask(it.id, it.conf).apply { restoreProgress(it.progress) }
+        },
+    ) {
+        pending.clear()
+        pending.addAll(saveStates.pending.toList())
+        all.clear()
+        saveStates.all.forEach { saveState ->
+            all[saveState.id] = taskProvider(saveState)
+        }
+    }
 }

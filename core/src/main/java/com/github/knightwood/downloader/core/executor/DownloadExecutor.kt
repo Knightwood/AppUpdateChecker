@@ -100,14 +100,14 @@ open class DownloadExecutor(
                         if (elapsed >= 1.0) {//每隔1s统计一次
                             //瞬时速度
                             val instant = (totalBytes - lastBytes) / elapsed
-                            println("瞬时速度: ${"%.2f".format(instant / 1024 / 1024)} MB/s")
+                            logger.info("瞬时速度: ${"%.2f".format(instant / 1024 / 1024)} MB/s")
                             lastBytes = totalBytes
                             lastTime = now
 
                             //平均速度
                             val totalSec = (System.nanoTime() - startTime) / 1_000_000_000.0
                             val avg = totalBytes / totalSec
-                            println("完成: $totalBytes 字节, 平均 ${"%.2f".format(avg / 1024 / 1024)} MB/s")
+                            logger.info("完成: $totalBytes 字节, 平均 ${"%.2f".format(avg / 1024 / 1024)} MB/s")
                         }
 
                         onStatusChanged(DownloadStatus.DOWNLOADING(length, totalBytes))
