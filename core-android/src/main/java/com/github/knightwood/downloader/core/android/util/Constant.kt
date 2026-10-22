@@ -1,4 +1,4 @@
-package com.github.knightwood.downloader.core.android.model
+package com.github.knightwood.downloader.core.android.util
 
 object Constant {
 
@@ -33,6 +33,11 @@ object Constant {
     /**
      * 下载文件夹名
      */
-    const val CACHE_DIR_NAME ="AppUpdateCache"
+    const val CACHE_DIR_NAME ="DownloadCache"
+
+    /**
+     * 默认下载文件名称前缀
+     */
+    const val DEFAULT_FILE_NAME_PREFIX ="DownloadFile"
 
 }

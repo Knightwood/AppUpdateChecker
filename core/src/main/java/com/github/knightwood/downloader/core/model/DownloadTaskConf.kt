@@ -41,6 +41,8 @@ data class DownloadTaskConf(
 ) {
     /**
      * 文件路径
+     *
+     * 尽量减少依赖此变量，在Android平台，路径很可能是MediaStore或是SAF框架返回的android.net.Uri
      */
     val path: Path = dirPath.resolve(name)
 }

@@ -1,7 +1,7 @@
-package com.github.knightwood.downloader.core.service
+package com.github.knightwood.downloader.core.android.service
 
 import android.os.Binder
-import com.github.knightwood.downloader.core.model.TaskDesc
+import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
 import com.github.knightwood.downloader.core.task.DownloadTask
 
 abstract class DownloadServiceLinker : Binder() {
@@ -9,7 +9,7 @@ abstract class DownloadServiceLinker : Binder() {
 
     abstract fun submitTask(
         id: Int,
-        conf: TaskDesc,
+        conf: AndroidDownloadParams,
     ):DownloadTask
 
     abstract fun findTask(id: Int): DownloadTask?

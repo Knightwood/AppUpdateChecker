@@ -9,15 +9,15 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.activity.ComponentDialog
 import androidx.lifecycle.coroutineScope
-import com.github.knightwood.downloader.core.Downloader
-import com.github.knightwood.downloader.core.model.TaskDesc
-import com.github.knightwood.downloader.core.service.DownloadServiceLinker
+import com.github.knightwood.downloader.core.android.Downloader
+import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
+import com.github.knightwood.downloader.core.android.service.DownloadServiceLinker
 import com.kiylx.tools.view_ui.NumberProgressBar
 import com.kiylx.tools.view_ui.R
 import kotlinx.coroutines.launch
 
 open class BasicApkUpdateDialogFragment constructor(
-    val param: TaskDesc,
+    val param: AndroidDownloadParams,
     context: Context,
     themeResId: Int,
 ) : ComponentDialog(context, themeResId) {

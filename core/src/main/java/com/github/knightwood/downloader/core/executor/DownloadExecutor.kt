@@ -3,6 +3,7 @@ package com.github.knightwood.downloader.core.executor
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.filestorage.FileStorage
+import com.github.knightwood.downloader.core.util.contentLength
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,7 +79,7 @@ open class DownloadExecutor(
         }
         if (con.responseCode == HttpURLConnection.HTTP_OK) {
             //下载
-            val length = con.contentLengthLong
+            val length = con.contentLength()
             val buffer = ByteArray(HttpConstant.COPY_BUFFER_SIZE)
             var totalBytes = 0L
             var read: Int
@@ -130,8 +131,8 @@ open class DownloadExecutor(
             con.responseCode == HttpURLConnection.HTTP_SEE_OTHER ||
             con.responseCode == 307 || con.responseCode == 308
         ) {
-            val location = con.getHeaderField("Location")   // 先取
-            con.disconnect()                                // 再断
+            val location = con.getHeaderField("Location")
+            con.disconnect()
             if (location.isNullOrBlank()) {
                 onStatusChanged(DownloadStatus.ERROR(IOException("Redirect without Location")))
                 return

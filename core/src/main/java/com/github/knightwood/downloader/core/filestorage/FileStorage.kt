@@ -1,6 +1,7 @@
 package com.github.knightwood.downloader.core.filestorage
 
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
+import com.github.knightwood.downloader.core.util.FileUtil
 import okio.Path
 import java.io.Closeable
 import java.io.File
@@ -34,6 +35,8 @@ interface FileStorage : Closeable, Flushable {
 
     @Throws(IOException::class)
     override fun close()
+
+    fun findCache(md5: String): Path? = FileUtil.findCache(path(), md5)
 }
 
 object FileStorageFactory {

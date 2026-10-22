@@ -34,5 +34,4 @@ class DownloadTaskEntity(
      */
     var chuckCount: Int = 0,
 
-    ) {
-}
+)

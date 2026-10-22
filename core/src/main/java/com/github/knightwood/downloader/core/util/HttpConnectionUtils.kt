@@ -19,6 +19,8 @@ object HttpConnectionUtils {
             requestMethod = "GET"
             // 用 Range 探测而不是 HEAD, 因为很多服务器 HEAD 不返回 Accept-Ranges
             setRequestProperty("Range", "bytes=0-0")
+            // HttpURLConnection默认在请求中使用gzip压缩, 这会导致无法获取content-length.
+            // 为可以获取content-length, 需将"Accept-Encoding"指定为"identity".
             setRequestProperty("Accept-Encoding", "identity")
             readTimeout = HttpConstant.HTTP_TIME_OUT
             connectTimeout = HttpConstant.HTTP_TIME_OUT
@@ -33,10 +35,10 @@ object HttpConnectionUtils {
                     // Content-Range: bytes 0-0/12345
                     val contentRange = con.getHeaderField("Content-Range")
                     val total = contentRange?.substringAfterLast('/')?.toLongOrNull()
-                    total ?: con.contentLengthLong
+                    total ?: con.contentLength()
                 }
 
-                HttpURLConnection.HTTP_OK -> con.contentLengthLong
+                HttpURLConnection.HTTP_OK -> con.contentLength()
                 else -> return null
             }
             if (length <= 0) return null
@@ -59,3 +61,12 @@ data class UrlResponseMeta(
     val acceptRanges: Boolean = false,
     val fileName: String,
 )
+
+/**
+ * 获取 content-length，用于兼容 SDK 24 以下的 Android 模块.
+ *
+ * [HttpURLConnection.getContentLengthLong] JVM平台全版本可用; Android平台仅SDK 24+ 可用.
+ */
+fun HttpURLConnection.contentLength(): Long {
+   return getHeaderFieldLong("content-length", -1);
+}

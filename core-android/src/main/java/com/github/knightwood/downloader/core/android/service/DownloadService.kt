@@ -1,4 +1,4 @@
-package com.github.knightwood.downloader.core.service
+package com.github.knightwood.downloader.core.android.service
 
 import android.app.NotificationManager
 import android.app.Service
@@ -9,14 +9,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.ServiceCompat
-import com.github.knightwood.downloader.core.Downloader
-import com.github.knightwood.downloader.core.model.TaskDesc
-import com.github.knightwood.downloader.core.model.DownloadTaskConf
-import com.github.knightwood.downloader.core.util.HttpConstant
-import com.github.knightwood.downloader.core.executor.DownloadExecutor
-import com.github.knightwood.downloader.core.model.DownloadStatus
-import com.github.knightwood.downloader.core.task.DownloadTask
-import com.github.knightwood.downloader.core.taskmgr.TaskLineCollaborator
+
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,34 +19,48 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
-import kotlinx.coroutines.withContext
-import okio.Path.Companion.toOkioPath
 import kotlin.time.Duration.Companion.seconds
+
+import okio.Path.Companion.toOkioPath
+
+import com.github.knightwood.downloader.core.android.Downloader
+import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
+import com.github.knightwood.downloader.core.android.util.Constant
+import com.github.knightwood.downloader.core.model.DownloadTaskConf
+import com.github.knightwood.downloader.core.executor.DownloadExecutorFactory
+import com.github.knightwood.downloader.core.filestorage.FileStorageFactory
+import com.github.knightwood.downloader.core.model.DownloadStatus
+import com.github.knightwood.downloader.core.task.DownloadTask
+import com.github.knightwood.downloader.core.taskmgr.TaskScheduler
 
 class DownloadService : Service() {
     private val scope: CoroutineScope =
-        CoroutineScope(Dispatchers.IO) + SupervisorJob() + CoroutineName(HttpConstant.COROUTINE_NAME)
+        CoroutineScope(Dispatchers.IO) + SupervisorJob() + CoroutineName(Constant.COROUTINE_NAME)
     private var bomb: Job? = null
-    private val confMap: MutableMap<Int, TaskDesc> = mutableMapOf()
-    private val taskCollaborator: TaskLineCollaborator = TaskLineCollaborator(scope)
+    private val confMap: MutableMap<Int, AndroidDownloadParams> = mutableMapOf()
+    private val taskMgr: TaskScheduler = TaskScheduler(scope, Downloader.maxParallel)
     private val conn = object : DownloadServiceLinker() {
 
         override val service: DownloadService
             get() = this@DownloadService
 
-        override fun submitTask(id: Int, conf: TaskDesc): DownloadTask {
+        override fun submitTask(id: Int, conf: AndroidDownloadParams): DownloadTask {
             this@DownloadService.confMap[id] = conf
             val task = generateTask(id, conf)
-            taskCollaborator.submit(task)
+            scope.launch {
+                taskMgr.submit(task)
+            }
             return task
         }
 
         override fun findTask(id: Int): DownloadTask? {
-            return taskCollaborator.findTask(id)
+            return taskMgr.findTaskById(id)
         }
 
         override fun cancelTask(id: Int) {
-            taskCollaborator.cancelTask(id)
+            scope.launch {
+                taskMgr.findTaskById(id)?.cancel()
+            }
         }
 
         override fun stopService() {
@@ -67,12 +74,10 @@ class DownloadService : Service() {
 
     override fun onCreate() {
         Downloader.mNotifier.createNotificationChannel(applicationContext)
-        taskCollaborator.run()
-        taskCollaborator.setTaskProcessor { currTask ->
+        taskMgr.run()
+        taskMgr.setActiveTaskProcessor { currTask ->
             scope.launch {
-                withContext(Dispatchers.IO) {
-                    processTaskState(currTask)
-                }
+                processTaskState(currTask)
             }
         }
     }
@@ -98,52 +103,54 @@ class DownloadService : Service() {
     }
 
     override fun onDestroy() {
-        taskCollaborator.close()
+        taskMgr.close()
         scope.cancel()
     }
 
     private fun generateTask(
         id: Int,
-        conf: TaskDesc,
+        params: AndroidDownloadParams,
     ): DownloadTask {
+        /* 文件名、分块下载配置 不做处理，需要在弹窗建立下载任务时使用工具类探测自动填充,或是用户手动输入 */
+        /* 若用户已指定下载路径，则不必再指定为内置路径 */
+        val dirPath = this@DownloadService.externalCacheDir!!.toOkioPath()
+            .resolve(params.taskParams.saveRelativePath ?: Constant.CACHE_DIR_NAME)
+        val conf = DownloadTaskConf(
+            url = params.fileEntity.url!!,
+            md5 = params.fileEntity.md5,
+            dirPath = dirPath,
+            name = params.fileEntity.name,
+        )
         return DownloadTask(
             id = id,
-            executor = conf.taskImI.downloadExecutor ?: DownloadExecutor(),
-            conf = DownloadTaskConf(
-                md5 = conf.fileEntity.md5,
-                url = conf.fileEntity.url!!
-            ),
-            produceFile = {
-                val path = this@DownloadService.externalCacheDir!!.toOkioPath()
-                    .resolve(conf.taskImI.saveRelativePath ?: HttpConstant.CACHE_DIR_NAME)
-                path.toFile()
-            }
+            conf = conf,
+            executorProvider = { params.taskParams.downloadExecutor ?: DownloadExecutorFactory.create(conf) },
+            fileStorageProvider = { params.taskParams.fileStorage ?: FileStorageFactory.create(conf) }
         )
     }
 
     private suspend fun processTaskState(currTask: DownloadTask) {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        val conf = confMap[currTask.id]!!
+        val currTaskConf = confMap[currTask.id]!!
         currTask.stateFlow.collect { state ->
-            if (!Downloader.disableNotification) {
-                val notification =
-                    Downloader.mNotifier.notificationOf(currTask.id, state, this@DownloadService)
-                Downloader.mNotifier.show(notificationManager, currTask.id, notification)
+            if (currTaskConf.taskParams.enableNotification == true) {
+                val notifier = currTaskConf.taskParams.mNotifier!!
+                val notification = notifier.notificationOf(currTask.id, state, this@DownloadService)
+                notifier.show(notificationManager, currTask.id, notification)
             }
             if (state is DownloadStatus.STARTING) {
                 bomb?.cancel()
                 bomb = null
             }
             if (state is DownloadStatus.FINISHED) {
-                if (conf.taskImI.autoHandleAfterDownloaded) {
-                    Downloader.postHandle.process(
-                        context = this@DownloadService,
-                        path = state.path,
-                        taskId = currTask.id,
-                        conf = conf,
-                    )
-                }
-                if (Downloader.shutdownAfterDownloaded && taskCollaborator.isEmpty()) {
+                (currTaskConf.taskParams.postHandler ?: Downloader.postHandler)?.process(
+                    context = this@DownloadService,
+                    path = state.path,
+                    taskId = currTask.id,
+                    conf = currTaskConf,
+                )
+
+                if (Downloader.shutdownAfterDownloaded && taskMgr.isEmpty()) {
                     //当前任务结束且没有其他任务,10s后停止服务
                     bomb = scope.launch {
                         delay(10.seconds)
@@ -172,7 +179,7 @@ class DownloadService : Service() {
 
         fun bind(context: Context, conn: ServiceConnection) {
             val intent = Intent(context, DownloadService::class.java)
-            context.bindService(intent, conn, Context.BIND_AUTO_CREATE)
+            context.bindService(intent, conn, BIND_AUTO_CREATE)
         }
 
         fun stop(context: Context) {

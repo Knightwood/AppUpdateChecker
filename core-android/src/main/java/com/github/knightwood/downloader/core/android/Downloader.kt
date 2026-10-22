@@ -1,4 +1,4 @@
-package com.github.knightwood.downloader.core
+package com.github.knightwood.downloader.core.android
 
 import android.content.ComponentName
 import android.content.Context
@@ -7,18 +7,25 @@ import android.os.IBinder
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
-import com.github.knightwood.downloader.core.model.TaskDesc
-import com.github.knightwood.downloader.core.service.INotifier
-import com.github.knightwood.downloader.core.service.BasicNotifierImpl
-import com.github.knightwood.downloader.core.util.ApkUtil
+import com.github.knightwood.downloader.core.android.service.INotifier
+import com.github.knightwood.downloader.core.android.service.ApkUpdateNotifierImpl
 import okio.Path
-import com.github.knightwood.downloader.core.service.DownloadService
-import com.github.knightwood.downloader.core.service.DownloadServiceLinker
+import com.github.knightwood.downloader.core.android.service.DownloadService
+import com.github.knightwood.downloader.core.android.service.DownloadServiceLinker
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
+import com.github.knightwood.downloader.core.android.util.Constant
+import com.github.knightwood.downloader.core.android.util.Constant.CACHE_DIR_NAME
+import com.github.knightwood.downloader.core.executor.IDownloadExecutor
+import com.github.knightwood.downloader.core.filestorage.FileStorage
 
 /**
+ * 此类用于记录下载服务的全局配置
+ *
+ * 任务配置[AndroidDownloadParams]优先级高于[Downloader]全局配置
+ *
  * ```
  * //设置全局配置
  * Downloader {
@@ -41,34 +48,54 @@ import kotlin.coroutines.resumeWithException
  * linker.stopService() //关停服务
  *
  * ```
+ *
+ * 流程设计:
+ * 1. 生成下载配置信息, 提交到服务, 得到服务返回的任务实例
+ * 2. 将任务实例id作为参数启动ui弹窗, 弹窗通过服务获取下载信息、下载任务实体, 弹窗显示下载信息、进度
+ *
+ * 应用下载、更新，实则是构建了一个后处理指定为安装应用的普通任务
  */
 object Downloader {
     /**
      * 提供下载状态、进度状态栏通知功能
      */
-    var mNotifier: INotifier = BasicNotifierImpl()
+    var mNotifier: INotifier = ApkUpdateNotifierImpl()
 
     /**
-     * true: 禁止使用通知栏通知消息提示下载状态和进度
-     * 如果启动服务时使用了前台服务, 即使此变量为false,也会显示一条通知消息
+     * 同时下载最大数量
      */
-    var disableNotification = false
+    var maxParallel: Int = 8
 
     /**
-     * 下载完成并使用[postHandle]处理后自动结束[DownloadService]
+     * 全局配置
+     * true: 使用通知栏通知消息提示下载状态和进度
+     * 如果启动服务时使用了前台服务, 即使此变量为false,也会显示一条通知消息
+     *
+     * 此变量为true时如果[AndroidDownloadParams]中关闭了下载通知, 下载过程中将不显示通知栏通知
+     */
+    var enableNotification = true
+
+    /**
+     * 下载完成并使用[postHandler]处理后自动结束[DownloadService]
      */
     var shutdownAfterDownloaded = true
 
     /**
      * 下载结束后[DownloadService]会自动调用此接口方法以对下载文件做处理
+     *
+     * 如果[AndroidDownloadParams]中指定了后处理接口实现, 将不再使用此处的接口实现进行处理
      */
-    var postHandle: DownloadedHandle = DownloadedHandle { context, path, id, conf ->
-        ApkUtil.installApk(context, authorities(context), path.toFile())
-    }
+    var postHandler: IDownloadedHandler? = null
 
     operator fun invoke(action: Downloader.() -> Unit) {
         action(this)
     }
+
+    /**
+     * 提供自定义下载执行器
+     */
+    var downloadExecutor: IDownloadExecutor? = null
+
 
     /**
      * 获取用于分享安装包进行安装的fileProvider authorities
@@ -111,6 +138,6 @@ object Downloader {
     }
 }
 
-fun interface DownloadedHandle {
-    fun process(context: Context, path: Path, taskId: Int, conf: TaskDesc)
+fun interface IDownloadedHandler {
+    fun process(context: Context, path: Path, taskId: Int, conf: AndroidDownloadParams)
 }

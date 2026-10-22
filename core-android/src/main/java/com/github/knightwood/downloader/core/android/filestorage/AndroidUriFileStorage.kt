@@ -19,6 +19,10 @@ class AndroidUriFileStorage(
         application.contentResolver.delete(path, null, null)
     }
 
+    override fun findCache(md5: String): Path? {
+        return null
+    }
+
     override fun path(): Path {
         return path.path!!.toPath()
     }

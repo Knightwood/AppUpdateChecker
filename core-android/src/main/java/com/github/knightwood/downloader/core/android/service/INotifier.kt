@@ -1,4 +1,4 @@
-package com.github.knightwood.downloader.core.service
+package com.github.knightwood.downloader.core.android.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -6,10 +6,11 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadStatus
-import com.github.knightwood.downloader.core.util.ApkUtil
 import com.github.knightwood.downloader.core.R
+import com.github.knightwood.downloader.core.android.model.Constant
+import com.github.knightwood.downloader.core.android.util.ApkUtil
+import com.github.knightwood.downloader.core.android.util.Constant
 
 interface INotifier {
     val NOTIFY_ID: Int
@@ -25,11 +26,11 @@ interface INotifier {
     fun createNotificationChannel(context: Context)
 }
 
-open class BasicNotifierImpl : INotifier {
-    override val CHANNEL_ID: String = HttpConstant.DEFAULT_CHANNEL_ID
-    override val CHANNEL_NAME: String = HttpConstant.DEFAULT_CHANNEL_NAME
-    override val CHANNEL_DESC: String = HttpConstant.DEFAULT_CHANNEL_DESC
-    override val NOTIFY_ID: Int = HttpConstant.DEFAULT_NOTIFY_ID
+open class ApkUpdateNotifierImpl : INotifier {
+    override val CHANNEL_ID: String = Constant.DEFAULT_CHANNEL_ID
+    override val CHANNEL_NAME: String = Constant.DEFAULT_CHANNEL_NAME
+    override val CHANNEL_DESC: String = Constant.DEFAULT_CHANNEL_DESC
+    override val NOTIFY_ID: Int = Constant.DEFAULT_NOTIFY_ID
 
     override fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -58,7 +59,7 @@ open class BasicNotifierImpl : INotifier {
     }
 
     override fun show(notificationManager: NotificationManager, taskId: Int, notification: Notification) {
-        notificationManager.notify(NOTIFY_ID, notification)
+        notificationManager.notify(taskId, notification)
     }
 
     override fun notificationOf(taskId: Int, state: DownloadStatus, context: Context): Notification {

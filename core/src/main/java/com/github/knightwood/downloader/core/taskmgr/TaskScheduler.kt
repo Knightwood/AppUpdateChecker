@@ -6,7 +6,6 @@ import com.github.knightwood.downloader.core.task.mapping2QueueType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable.isActive
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -33,8 +32,9 @@ class TaskScheduler(
     private val pending = ArrayDeque<Int>()
     private val waitSignal = Channel<Unit>(Channel.CONFLATED)
 
-    // 正在执行的下载任务
-    private var workers: List<Job> = emptyList()
+    // 正在执行的下载任务 Map<JobId,Job信息>
+    private var workers: Map<Int, Worker> = emptyMap()
+    private var mActiveTaskListener: ActiveTaskListener? = null
 
     /**
      * 查找某队列状态下的所有任务
@@ -59,20 +59,30 @@ class TaskScheduler(
     }
 
     /**
+     * 查找某些队列状态下的全部任务
+     */
+    fun tasksIn(vararg status: TaskQueueType): Map<TaskQueueType, List<DownloadTask>> {
+        return status.associateWith { id -> tasksIn(id) }
+    }
+
+    /**
      * 产生[maxParallel]个work协程，不间断的听从waitSignal信号，从[pending]队列中取出任务并开始执行
      * 注意：
      * 暂停下载中的任务，在协程看来任务的execute方法没有结束，此状态下works中的协程无法选择一个等待队列中的任务执行
      */
     override fun run() {
         if (workers.isNotEmpty()) return
-        workers = (0 until maxParallel).map {
-            scope.launch(Dispatchers.IO) {
+        workers = (0 until maxParallel).associateWith { jobId ->
+            val job = scope.launch(Dispatchers.IO) {
                 while (true) {
+                    workers[jobId]?.isWorking = false
                     waitSignal.receive()                     // 等到有任务
-                    val id = nextTask() ?: continue          // 取一个
+                    val id = nextTask() ?: continue      // 取一个
+                    workers[jobId]?.isWorking = true
                     runTask(id)
                 }
             }
+            TaskScheduler.Worker(jobId, job, false)
         }
     }
 
@@ -89,6 +99,7 @@ class TaskScheduler(
         try {
             val task = all[id]!!
             coroutineScope {
+                mActiveTaskListener?.onTaskStart(task)
                 task.execute()
             }
         } catch (e: CancellationException) {
@@ -106,6 +117,10 @@ class TaskScheduler(
     suspend fun submit(task: DownloadTask) {
         all[task.id] = task
         enqueue(task.id)
+    }
+
+    fun findTaskById(id: Int): DownloadTask? {
+        return all[id]
     }
 
     /**
@@ -146,8 +161,8 @@ class TaskScheduler(
     //</editor-fold>
 
     override fun close() {
-        workers.forEach { it.cancel() }
-        workers = emptyList()
+        workers.forEach { it.value.job.cancel() }
+        workers = emptyMap()
         waitSignal.close()
     }
 
@@ -174,4 +189,31 @@ class TaskScheduler(
             all[saveState.id] = taskProvider(saveState)
         }
     }
+
+    //<editor-fold desc="其他">
+    fun setActiveTaskProcessor(listener: ActiveTaskListener) {
+        mActiveTaskListener = listener
+    }
+
+    /**
+     * 判断是否已没有等待或正在下载的任务
+     *
+     * @return 若没有排队等待下载的任务,也没有正在下载的任务, 返回true
+     */
+    fun isEmpty(): Boolean {
+        return pending.isEmpty() && workers.all { !it.value.isWorking }
+    }
+
+    /**
+     * 记录一个工作协程
+     */
+    data class Worker(
+        val jobId: Int,
+        val job: Job,
+        /**
+         * 当协程运行某任务时,此标志位为true,否则为false
+         */
+        var isWorking: Boolean,
+    )
+    //</editor-fold>
 }

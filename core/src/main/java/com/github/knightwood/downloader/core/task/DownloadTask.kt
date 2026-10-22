@@ -35,7 +35,6 @@ open class DownloadTask(
     val conf: DownloadTaskConf,
     val executorProvider: () -> IDownloadExecutor = { DownloadExecutorFactory.create(conf) },
     val fileStorageProvider: () -> FileStorage = { FileStorageFactory.create(conf) },
-    val fs: FileSystem = FileSystem.SYSTEM,
 ) {
     private val logger = LoggerFactory.getLogger("DownloadTask#$id")
     private val executor: IDownloadExecutor by lazy { executorProvider() }
@@ -83,19 +82,20 @@ open class DownloadTask(
      * 调用此方法将挂起协程直到下载完成
      */
     suspend fun execute() {
-        val cache = conf.md5?.let { FileUtil.findCache(conf.path, it) }
+        val fileStorage = fileStorageProvider()
+        val cache = conf.md5?.let { fileStorage.findCache(it) }
         if (cache != null) {
             _stateFlow.value = DownloadStatus.FINISHED(cache)
             return
         }
         if (conf.isDeleteLastFile) {
-            fs.delete(conf.path)
+            fileStorage.delete()
         }
         if (isCancelled || isFailed) { //这是下载失败又重新下载的，需重置某些状态
             _stateFlow.value = DownloadStatus.IDLE
         }
         executor.download(
-            fileStorage = fileStorageProvider(),
+            fileStorage = fileStorage,
             url = conf.url
         ).collect { state ->
             _stateFlow.value = state

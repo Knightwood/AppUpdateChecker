@@ -20,7 +20,7 @@ import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.listener.OnButtonClickListener
 import com.github.knightwood.downloader.core.listener.OnDownloadListenerAdapter
 import com.github.knightwood.downloader.core.manager.DownloadManager
-import com.github.knightwood.downloader.core.service.DownloadService
+import com.github.knightwood.downloader.core.android.service.DownloadService
 import com.github.knightwood.downloader.core.util.ApkUtil
 import com.github.knightwood.downloader.core.util.DensityUtil
 import com.github.knightwood.downloader.core.util.LogUtil
