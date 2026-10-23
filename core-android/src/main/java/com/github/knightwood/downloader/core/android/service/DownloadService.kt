@@ -21,14 +21,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlin.time.Duration.Companion.seconds
 
-import okio.Path.Companion.toOkioPath
-
 import com.github.knightwood.downloader.core.android.Downloader
+import com.github.knightwood.downloader.core.android.filestorage.AndroidFileStorageFactory
 import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
+import com.github.knightwood.downloader.core.android.model.AndroidPath
 import com.github.knightwood.downloader.core.android.util.Constant
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import com.github.knightwood.downloader.core.executor.DownloadExecutorFactory
-import com.github.knightwood.downloader.core.filestorage.FileStorageFactory
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.task.DownloadTask
 import com.github.knightwood.downloader.core.taskmgr.TaskScheduler
@@ -37,7 +36,7 @@ class DownloadService : Service() {
     private val scope: CoroutineScope =
         CoroutineScope(Dispatchers.IO) + SupervisorJob() + CoroutineName(Constant.COROUTINE_NAME)
     private var bomb: Job? = null
-    private val confMap: MutableMap<Int, AndroidDownloadParams> = mutableMapOf()
+    private val paramsMap: MutableMap<Int, AndroidDownloadParams> = mutableMapOf()
     private val taskMgr: TaskScheduler = TaskScheduler(scope, Downloader.maxParallel)
     private val conn = object : DownloadServiceLinker() {
 
@@ -45,7 +44,7 @@ class DownloadService : Service() {
             get() = this@DownloadService
 
         override fun submitTask(id: Int, conf: AndroidDownloadParams): DownloadTask {
-            this@DownloadService.confMap[id] = conf
+            this@DownloadService.paramsMap[id] = conf
             val task = generateTask(id, conf)
             scope.launch {
                 taskMgr.submit(task)
@@ -111,43 +110,62 @@ class DownloadService : Service() {
         id: Int,
         params: AndroidDownloadParams,
     ): DownloadTask {
-        /* 文件名、分块下载配置 不做处理，需要在弹窗建立下载任务时使用工具类探测自动填充,或是用户手动输入 */
-        /* 若用户已指定下载路径，则不必再指定为内置路径 */
-        val dirPath = this@DownloadService.externalCacheDir!!.toOkioPath()
-            .resolve(params.taskParams.saveRelativePath ?: Constant.CACHE_DIR_NAME)
-        val conf = DownloadTaskConf(
-            url = params.fileEntity.url!!,
+        val downloadTaskConf = DownloadTaskConf(
+            url = params.fileEntity.url,
             md5 = params.fileEntity.md5,
-            dirPath = dirPath,
             name = params.fileEntity.name,
+            dirPath = Constant.emptyPath,
+            isSupportChunkDownload = params.taskParams.isSupportChunkDownload,
+            chunkCount = params.taskParams.chunkCount,
+            minChunkSize = params.taskParams.minChunkSize,
         )
         return DownloadTask(
             id = id,
-            conf = conf,
-            executorProvider = { params.taskParams.downloadExecutor ?: DownloadExecutorFactory.create(conf) },
-            fileStorageProvider = { params.taskParams.fileStorage ?: FileStorageFactory.create(conf) }
+            conf = downloadTaskConf,
+            executorProvider = {
+                params.taskParams.downloadExecutor ?: DownloadExecutorFactory.create(downloadTaskConf)
+            },
+            fileStorageProvider = {
+                params.taskParams.path?.let { androidPath: AndroidPath ->
+                    AndroidFileStorageFactory.create(
+                        androidPath = androidPath,
+                        application = application,
+                        parallel = downloadTaskConf.isSupportChunkDownload
+                    )
+                } ?: Downloader.defaultFileStorage(
+                    context = application,
+                    filename = downloadTaskConf.name,
+                    parallel = downloadTaskConf.isSupportChunkDownload
+                )
+            }
         )
     }
 
     private suspend fun processTaskState(currTask: DownloadTask) {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        val currTaskConf = confMap[currTask.id]!!
+        val params = paramsMap[currTask.id]!!
         currTask.stateFlow.collect { state ->
-            if (currTaskConf.taskParams.enableNotification == true) {
-                val notifier = currTaskConf.taskParams.mNotifier!!
-                val notification = notifier.notificationOf(currTask.id, state, this@DownloadService)
+            if (params.taskParams.enableNotification == true) {
+                val notifier = params.taskParams.mNotifier!!
+                val notification = notifier.notificationOf(
+                    taskId = currTask.id,
+                    params = params,
+                    state = state,
+                    context = this@DownloadService
+                )
                 notifier.show(notificationManager, currTask.id, notification)
             }
             if (state is DownloadStatus.STARTING) {
+                //任务开始执行, 取消停止服务
                 bomb?.cancel()
                 bomb = null
             }
             if (state is DownloadStatus.FINISHED) {
-                (currTaskConf.taskParams.postHandler ?: Downloader.postHandler)?.process(
+                params.taskParams.postHandler?.process(
                     context = this@DownloadService,
-                    path = state.path,
+                    path = params.taskParams.path,
                     taskId = currTask.id,
-                    conf = currTaskConf,
+                    params = params,
                 )
 
                 if (Downloader.shutdownAfterDownloaded && taskMgr.isEmpty()) {

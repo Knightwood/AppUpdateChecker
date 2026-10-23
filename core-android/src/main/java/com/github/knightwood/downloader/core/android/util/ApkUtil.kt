@@ -6,15 +6,34 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import androidx.core.content.FileProvider
+import com.github.knightwood.downloader.core.android.model.AndroidPath
+import com.github.knightwood.downloader.core.android.model.copyTo
 import java.io.File
+import java.util.Date
 
 
 object ApkUtil {
     const val TAG = "ApkUtil"
 
     /** install package form file */
+    fun installApk(context: Context, authorities: String, path: AndroidPath) {
+        context.startActivity(createInstallIntent(context, authorities, path))
+    }
+
     fun installApk(context: Context, authorities: String, apk: File) {
         context.startActivity(createInstallIntent(context, authorities, apk))
+    }
+
+    fun createInstallIntent(context: Context, authorities: String, path: AndroidPath): Intent {
+        if (path is AndroidPath.Jvm) {
+            return createInstallIntent(context, authorities, path.path.toFile())
+        } else {
+            //复制到缓存路径
+            val dirPath = Constant.downloadCacheDirPath(context)
+            val apk = dirPath.resolve(Constant.fileName("apk")).toFile()
+            path.copyTo(apk, context)
+            return createInstallIntent(context, authorities, apk)
+        }
     }
 
     fun createInstallIntent(context: Context, authorities: String, apk: File): Intent {

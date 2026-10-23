@@ -1,5 +1,6 @@
 package com.github.knightwood.downloader.core.task
 
+import com.github.knightwood.downloader.core.filestorage.FileStorageFactory
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
@@ -17,6 +18,7 @@ class DownloadTaskBuilder(
     private var downloadProgress: DownloadStatus.DOWNLOADING? = null,
 ) {
     private val logger = LoggerFactory.getLogger("DownloadTaskBuilder")
+    private var dirPath: Path? = null
 
     constructor(saveState: DownloadTaskSaveState) : this(saveState.id, saveState.conf, saveState.progress)
 
@@ -49,7 +51,7 @@ class DownloadTaskBuilder(
     }
 
     fun saveDir(dirPath: Path): DownloadTaskBuilder {
-        conf = conf.copy(dirPath = dirPath)
+        this.dirPath = dirPath
         return this
     }
 
@@ -64,7 +66,14 @@ class DownloadTaskBuilder(
     }
 
     fun build(): DownloadTask {
-        return DownloadTask(id, conf).also {
+        return DownloadTask(
+            id = id, conf = conf,
+            fileStorageProvider = {
+                FileStorageFactory.create(
+                    parallel = conf.isSupportChunkDownload,
+                    fileProvider = { dirPath!!.resolve(conf.name).toFile() })
+            }
+        ).also {
             runCatching {
                 it.restoreProgress(downloadProgress)
             }.onFailure {

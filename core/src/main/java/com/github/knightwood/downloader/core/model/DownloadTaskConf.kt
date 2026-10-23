@@ -1,6 +1,8 @@
 package com.github.knightwood.downloader.core.model
 
+import com.github.knightwood.downloader.core.util.FileUtil
 import com.github.knightwood.downloader.core.util.HttpConstant
+import com.github.knightwood.downloader.core.util.OSUtil
 import okio.Path
 import okio.Path.Companion.toPath
 import java.util.UUID
@@ -16,20 +18,18 @@ data class DownloadTaskConf(
     val md5: String? = null,
     /**
      * 下载文件保存路径
+     *
+     * android平台如果使用android.net.Uri读写文件, 此变量不可用
      */
-    val dirPath: Path = System.getProperty("user.home")!!.toPath().resolve("Downloads"),
+    val dirPath: Path = FileUtil.systemDownloadDirPath(),
     /**
      * 下载文件名称
      */
     val name: String = UUID.randomUUID().toString(),
     /**
-     * true: 执行下载之前删除残留文件
-     */
-    var isDeleteLastFile: Boolean = false,
-    /**
      * 是否支持分块下载
      */
-    val isSupportChunkDownload :Boolean = false,
+    val isSupportChunkDownload: Boolean = false,
     /**
      * 分块数量
      */
@@ -42,7 +42,13 @@ data class DownloadTaskConf(
     /**
      * 文件路径
      *
-     * 尽量减少依赖此变量，在Android平台，路径很可能是MediaStore或是SAF框架返回的android.net.Uri
+     * 在Android平台，读写文件使用MediaStore或是SAF框架返回的android.net.Uri时此变量不可用
      */
     val path: Path = dirPath.resolve(name)
+        get() {
+            if (OSUtil.isAndroid) {
+                throw IllegalCallerException("android platform does not support path")
+            }
+            return field
+        }
 }

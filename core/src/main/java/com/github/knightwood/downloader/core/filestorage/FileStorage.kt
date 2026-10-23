@@ -1,17 +1,12 @@
 package com.github.knightwood.downloader.core.filestorage
 
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
-import com.github.knightwood.downloader.core.util.FileUtil
-import okio.Path
 import java.io.Closeable
 import java.io.File
 import java.io.Flushable
 import java.io.IOException
 
 interface FileStorage : Closeable, Flushable {
-    fun delete()
-
-    fun path(): Path
 
     @Throws(IOException::class)
     fun write(source: ByteArray, byteCount: Int) = write(source, 0, byteCount)
@@ -36,13 +31,13 @@ interface FileStorage : Closeable, Flushable {
     @Throws(IOException::class)
     override fun close()
 
-    fun findCache(md5: String): Path? = FileUtil.findCache(path(), md5)
 }
 
 object FileStorageFactory {
+
     fun create(parallel: Boolean = false, fileProvider: () -> File): FileStorage {
         return if (parallel) {
-            RandomAccessFileStorageImpl(fileProvider)
+            RandomAccessFileStorage(fileProvider)
         } else {
             FileStorageImpl(fileProvider)
         }

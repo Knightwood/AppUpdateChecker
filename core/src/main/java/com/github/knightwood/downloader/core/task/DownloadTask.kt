@@ -19,9 +19,7 @@ import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.model.DownloadTaskSaveState
 import com.github.knightwood.downloader.core.model.TaskQueueType
-import com.github.knightwood.downloader.core.util.FileUtil
 import com.github.knightwood.downloader.core.taskmgr.TaskScheduler
-import okio.FileSystem
 import org.slf4j.LoggerFactory
 
 /**
@@ -38,7 +36,7 @@ open class DownloadTask(
 ) {
     private val logger = LoggerFactory.getLogger("DownloadTask#$id")
     private val executor: IDownloadExecutor by lazy { executorProvider() }
-    private val _stateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow<DownloadStatus>(DownloadStatus.IDLE)
+    private val _stateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow(DownloadStatus.IDLE)
     val stateFlow: StateFlow<DownloadStatus> get() = _stateFlow
 
     //当前下载进度
@@ -59,7 +57,11 @@ open class DownloadTask(
     //最后的下载进度
     private var currentDownloadingProgress: DownloadStatus.DOWNLOADING? = null
 
-    constructor(saveState: DownloadTaskSaveState) : this(saveState.id, saveState.conf) {
+    constructor(
+        saveState: DownloadTaskSaveState,
+        executorProvider: () -> IDownloadExecutor = { DownloadExecutorFactory.create(saveState.conf) },
+        fileStorageProvider: () -> FileStorage = { FileStorageFactory.create(saveState.conf) },
+    ) : this(saveState.id, saveState.conf, executorProvider, fileStorageProvider) {
         runCatching {
             restoreProgress(saveState.progress)
         }.onFailure {
@@ -82,20 +84,11 @@ open class DownloadTask(
      * 调用此方法将挂起协程直到下载完成
      */
     suspend fun execute() {
-        val fileStorage = fileStorageProvider()
-        val cache = conf.md5?.let { fileStorage.findCache(it) }
-        if (cache != null) {
-            _stateFlow.value = DownloadStatus.FINISHED(cache)
-            return
-        }
-        if (conf.isDeleteLastFile) {
-            fileStorage.delete()
-        }
         if (isCancelled || isFailed) { //这是下载失败又重新下载的，需重置某些状态
             _stateFlow.value = DownloadStatus.IDLE
         }
         executor.download(
-            fileStorage = fileStorage,
+            fileStorage = fileStorageProvider(),
             url = conf.url
         ).collect { state ->
             _stateFlow.value = state
@@ -196,7 +189,6 @@ open class DownloadTask(
         }
         if (executor.isSupportRestoreState) {
             executor.restoreState(progress)
-            conf.isDeleteLastFile = false
             return true
         } else {
             logger.info("doesn't support restore state.")
@@ -232,6 +224,6 @@ fun DownloadStatus.mapping2QueueType() =
         is DownloadStatus.DOWNLOADING -> TaskQueueType.RUNNING
         DownloadStatus.PAUSED -> TaskQueueType.PAUSED
         DownloadStatus.CANCELED -> TaskQueueType.CANCELED
-        is DownloadStatus.FINISHED -> TaskQueueType.FINISHED
+        DownloadStatus.FINISHED -> TaskQueueType.FINISHED
         is DownloadStatus.ERROR -> TaskQueueType.FAILED
     }

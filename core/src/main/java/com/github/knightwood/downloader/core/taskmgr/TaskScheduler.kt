@@ -1,5 +1,6 @@
 package com.github.knightwood.downloader.core.taskmgr
 
+import com.github.knightwood.downloader.core.filestorage.FileStorage
 import com.github.knightwood.downloader.core.model.TaskQueueType
 import com.github.knightwood.downloader.core.task.DownloadTask
 import com.github.knightwood.downloader.core.task.mapping2QueueType
@@ -179,7 +180,9 @@ class TaskScheduler(
     suspend fun restoreState(
         saveStates: TaskSchedulerSaveState,
         taskProvider: (DownloadTaskSaveState) -> DownloadTask = {
-            DownloadTask(it.id, it.conf).apply { restoreProgress(it.progress) }
+            DownloadTask(
+                id = it.id, conf = it.conf,
+            ).apply { restoreProgress(it.progress) }
         },
     ) {
         pending.clear()

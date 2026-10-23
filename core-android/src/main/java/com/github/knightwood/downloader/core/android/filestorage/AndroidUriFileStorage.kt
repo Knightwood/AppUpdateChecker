@@ -15,24 +15,12 @@ class AndroidUriFileStorage(
 ) : FileStorage {
     val outStream by lazy { application.contentResolver.openOutputStream(path)!!.sink().buffer() }
 
-    override fun delete() {
-        application.contentResolver.delete(path, null, null)
-    }
-
-    override fun findCache(md5: String): Path? {
-        return null
-    }
-
-    override fun path(): Path {
-        return path.path!!.toPath()
-    }
-
     override fun write(source: ByteArray, offset: Int, byteCount: Int) {
         outStream.write(source, offset, byteCount)
     }
 
     override fun writeAt(pos: Long, source: ByteArray, sourceOffset: Int, byteCount: Int) {
-        write(source, sourceOffset, byteCount)
+        throw IllegalAccessError("This method should not be called")
     }
 
     override fun flush() {

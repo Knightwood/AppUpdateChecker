@@ -1,7 +1,7 @@
 package com.github.knightwood.downloader.core.executor
 
 import com.github.knightwood.downloader.core.filestorage.FileStorage
-import com.github.knightwood.downloader.core.filestorage.RandomAccessFileStorageImpl
+import com.github.knightwood.downloader.core.filestorage.RandomAccessFileStorage
 import com.github.knightwood.downloader.core.model.ChunkProgress
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadStatus
@@ -39,7 +39,7 @@ open class MultiChunkDownloadExecutor(
 
     override fun download(fileStorage: FileStorage, url: String): Flow<DownloadStatus> {
         // 分块下载必须使用支持随机写的 storage
-        if (fileStorage !is RandomAccessFileStorageImpl) {
+        if (fileStorage !is RandomAccessFileStorage) {
             logger.warn( "fileStorage 不是 RandomAccessFileStorageImpl, 退化为单连接下载")
             return super.download(fileStorage, url)
         }
@@ -47,7 +47,7 @@ open class MultiChunkDownloadExecutor(
     }
 
     private fun chunkFlow(
-        fileStorage: RandomAccessFileStorageImpl,
+        fileStorage: RandomAccessFileStorage,
         url: String,
     ): Flow<DownloadStatus> {
         return channelFlow {
@@ -157,7 +157,7 @@ open class MultiChunkDownloadExecutor(
                     send(DownloadStatus.CANCELED)
                 } else {
                     fileStorage.flush()
-                    send(DownloadStatus.FINISHED(fileStorage.path()))
+                    send(DownloadStatus.FINISHED)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -170,7 +170,7 @@ open class MultiChunkDownloadExecutor(
     }
 
     /**
-     * 单连接下载 (退化为父类逻辑, 但复用了 [RandomAccessFileStorageImpl])。
+     * 单连接下载 (退化为父类逻辑, 但复用了 [RandomAccessFileStorage])。
      */
     private suspend fun downloadSingle(
         fileStorage: FileStorage,
@@ -193,7 +193,7 @@ open class MultiChunkDownloadExecutor(
      * @param onProgress 增量回调, 参数是本块新增字节数
      */
     protected open suspend fun downloadChunk(
-        storage: RandomAccessFileStorageImpl,
+        storage: RandomAccessFileStorage,
         url: String,
         index: Int,
         start: Long,

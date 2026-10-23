@@ -2,7 +2,6 @@ package com.github.knightwood.downloader.core.util;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
-import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -99,13 +98,13 @@ public class URLUtilCompat {
 
     static String mimeTypeToExtension(String mimeType) {
         // 用 java.net.URLConnection 的映射，或自己维护一个表
-        String ext = MimeTypeMapCompat.getExtensionFromMimeType(mimeType);
+        String ext = MimeTypeUtils.guessExtensionFromMimeType(mimeType);
         return (ext != null && !ext.isEmpty()) ? "." + ext : null;
     }
 
     static String getMimeTypeFromExtension(String filename) {
         int dot = filename.lastIndexOf('.');
         if (dot < 0) return null;
-        return MimeTypeMapCompat.getMimeTypeFromExtension(filename.substring(dot + 1));
+        return MimeTypeUtils.guessMimeTypeFromExtension(filename.substring(dot + 1));
     }
 }

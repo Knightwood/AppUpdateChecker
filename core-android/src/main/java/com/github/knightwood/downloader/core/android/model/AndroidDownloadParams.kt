@@ -1,5 +1,7 @@
 package com.github.knightwood.downloader.core.android.model
 
+import java.util.Date
+
 import com.github.knightwood.downloader.core.android.IDownloadedHandler
 import com.github.knightwood.downloader.core.executor.IDownloadExecutor
 import com.github.knightwood.downloader.core.util.toDataUnit
@@ -9,9 +11,7 @@ import com.github.knightwood.downloader.core.android.Downloader.authorities
 import com.github.knightwood.downloader.core.android.service.ApkUpdateNotifierImpl
 import com.github.knightwood.downloader.core.android.service.INotifier
 import com.github.knightwood.downloader.core.android.util.ApkUtil
-import com.github.knightwood.downloader.core.filestorage.FileStorage
-import java.time.LocalDateTime
-
+import com.github.knightwood.downloader.core.util.HttpConstant
 
 class AndroidDownloadParams() {
 
@@ -39,8 +39,9 @@ class AndroidDownloadParams() {
  */
 class FileEntity(
     var id: Int = 0,
-    var name: String = Constant.DEFAULT_FILE_NAME_PREFIX + "_" + LocalDateTime.now().toString(),
-    var url: String? = null,
+    var url: String = "",
+    var mimeType: String = "tmp",
+    var name: String = Constant.fileName(mimeType),
     /** 字节数 */
     var size: Long? = null,
     var description: String? = null,
@@ -91,9 +92,21 @@ class TaskParams {
         get() = field ?: Downloader.postHandler
 
     /**
-     * 相对于externalCacheDir路径, 用于存储apk文件的路径
+     * 记录文件存储位置
      */
-    var saveRelativePath: String? = null
+    var path: AndroidPath? = null
+
+    var isSupportChunkDownload: Boolean = false
+
+    /**
+     * 分块数量
+     */
+    var chunkCount: Int = 0
+
+    /**
+     * 最小分块大小,单位byte
+     */
+    var minChunkSize: Long = HttpConstant.MIN_CHUNK_SIZE
 
     /**
      * 提供自定义下载执行器
@@ -101,17 +114,11 @@ class TaskParams {
     var downloadExecutor: IDownloadExecutor? = null
         get() = field ?: Downloader.downloadExecutor
 
-    /**
-     * 提供自定义文件处理
-     */
-    var fileStorage: FileStorage? = null
-
-
     companion object {
 
         val updateApkConf = TaskParams().apply {
             postHandler = IDownloadedHandler { context, path, id, conf ->
-                ApkUtil.installApk(context, authorities(context), path.toFile())
+                ApkUtil.installApk(context, authorities(context), path!!)
             }
             enableNotification = true
             mNotifier = ApkUpdateNotifierImpl()

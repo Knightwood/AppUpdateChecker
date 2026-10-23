@@ -11,14 +11,6 @@ class FileStorageImpl(
 ) : FileStorage {
     val sink by lazy { fileProvider().sink().buffer() }
 
-    override fun path(): Path {
-        return fileProvider().toOkioPath()
-    }
-
-    override fun delete() {
-        fileProvider().delete()
-    }
-
     private fun file(): File {
         return fileProvider().apply {
             if (!exists()) {
@@ -35,7 +27,7 @@ class FileStorageImpl(
      * 不支持文件随机位置写入
      */
     override fun writeAt(pos: Long, source: ByteArray, sourceOffset: Int, byteCount: Int) {
-        write(source, sourceOffset, byteCount)
+        throw IllegalAccessError("This method should not be called")
     }
 
     override fun flush() {

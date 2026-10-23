@@ -22,7 +22,7 @@ sealed class DownloadStatus {
 
     data object PAUSED : DownloadStatus()
 
-    data class FINISHED(val path: Path) : DownloadStatus()
+    data object FINISHED : DownloadStatus()
 
     data object CANCELED : DownloadStatus()
 

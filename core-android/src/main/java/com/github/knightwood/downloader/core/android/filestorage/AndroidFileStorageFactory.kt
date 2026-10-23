@@ -9,7 +9,7 @@ object AndroidFileStorageFactory {
     /**
      * @param androidPath 文件路径
      * @param application application
-     * @param parallel 分块下载（仅使用AndroidPath.JavaFile时有用）
+     * @param parallel 分块下载支持（仅使用AndroidPath.JavaFile时有用）
      */
     fun create(
         androidPath: AndroidPath,
@@ -17,16 +17,24 @@ object AndroidFileStorageFactory {
         parallel: Boolean = false,
     ): FileStorage {
         return when (androidPath) {
-            is AndroidPath.MediaStoreFile -> {
-                AndroidUriFileStorage(androidPath.uri, application)
+            is AndroidPath.MediaStore -> {
+                if (parallel) {
+                    AndroidUriRandomAccessFileStorage(androidPath.uri, application)
+                } else {
+                    AndroidUriFileStorage(androidPath.uri, application)
+                }
             }
 
             is AndroidPath.DocumentFile -> {
-                AndroidUriFileStorage(androidPath.uri, application)
+                if (parallel) {
+                    AndroidUriRandomAccessFileStorage(androidPath.uri, application)
+                } else {
+                    AndroidUriFileStorage(androidPath.uri, application)
+                }
             }
 
-            is AndroidPath.JavaFile -> {
-                FileStorageFactory.create(parallel, { androidPath.file.toFile() })
+            is AndroidPath.Jvm -> {
+                FileStorageFactory.create(parallel, { androidPath.path.toFile() })
             }
         }
     }

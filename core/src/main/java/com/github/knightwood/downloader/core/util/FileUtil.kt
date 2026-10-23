@@ -2,6 +2,7 @@ package com.github.knightwood.downloader.core.util
 
 import okio.FileSystem
 import okio.Path
+import okio.Path.Companion.toPath
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileInputStream
@@ -10,6 +11,8 @@ import java.security.MessageDigest
 
 object FileUtil {
     private val logger = LoggerFactory.getLogger("FileUtil")
+
+    fun systemDownloadDirPath() = System.getProperty("user.home")!!.toPath().resolve("Downloads")
 
     fun md5(file: File): String {
         try {
@@ -69,6 +72,20 @@ object FileUtil {
  * 根据字节数转换成易阅读的单位格式
  */
 val Long?.toDataUnit: String?
+    get() {
+        if (this == null) {
+            return null
+        }
+        if (this < 1024) {
+            return "${this}B"
+        }
+        if (this < 1024 * 1024) {
+            return "${this / 1024}KB"
+        }
+        return "${this / 1024 / 1024}MB"
+    }
+
+val Double?.toDataUnit: String?
     get() {
         if (this == null) {
             return null

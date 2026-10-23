@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="download_service_foreground_desc">等待文件下载</string>
-    <string name="app_update_background_downloading">正在后台下载新版本…</string>
-    <string name="app_update_start_download">开始下载</string>
-    <string name="app_update_start_download_hint">可稍后查看下载进度</string>
-    <string name="app_update_start_downloading">正在下载新版本</string>
-    <string name="app_update_download_completed">下载完成</string>
+    <string name="download_notify_start">开始下载"%s"</string>
+    <string name="download_notify_running">"%1$s"下载进度:%2$s</string>
+    <string name="download_notify_failed">"%s"下载失败</string>
+    <string name="download_notify_finish">"%s"下载完成</string>
+    <string name="download_notify_paused">"%s"下载暂停中</string>
+    <string name="download_notify_continue">点击继续下载</string>
     <string name="app_update_click_hint">点击进行安装</string>
-    <string name="app_update_download_error">下载出错</string>
-    <string name="app_update_continue_downloading">点击继续下载</string>
 </resources>
