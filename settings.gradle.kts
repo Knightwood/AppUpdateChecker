@@ -1,4 +1,4 @@
-rootProject.name = "AppUpdateChecker"
+rootProject.name = "AndroidDownloader"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 includeBuild("./build-logic")
 
@@ -39,8 +39,6 @@ dependencyResolutionManagement {
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
     }
 }
-include(":app")
 include(":core")
 include(":core-android")
-//include(":compose")
-include(":view")
+include(":ui")

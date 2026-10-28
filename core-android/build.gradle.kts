@@ -38,12 +38,10 @@ android {
 
 dependencies {
     api(project(":core"))
-    implementation(libs.androidx.constraintLayout)
     implementation(libs.androidx.appCompat)
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlin.coroutines.core)
     implementation(libs.kotlin.coroutines.android)
-    implementation(libs.google.material)
     implementation(libs.okio)
 }

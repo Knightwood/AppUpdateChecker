@@ -2,6 +2,7 @@ package com.github.knightwood.downloader.core.android.service
 
 import android.os.Binder
 import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
+import com.github.knightwood.downloader.core.android.model.AndroidDownloadTaskSaveState
 import com.github.knightwood.downloader.core.task.DownloadTask
 
 abstract class DownloadServiceLinker : Binder() {
@@ -18,4 +19,7 @@ abstract class DownloadServiceLinker : Binder() {
 
     abstract fun stopService()
 
+    abstract suspend fun saveState(): AndroidDownloadTaskSaveState
+
+    abstract suspend fun restoreState(state: AndroidDownloadTaskSaveState)
 }

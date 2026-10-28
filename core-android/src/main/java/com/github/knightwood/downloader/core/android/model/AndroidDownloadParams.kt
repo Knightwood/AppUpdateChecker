@@ -1,7 +1,5 @@
 package com.github.knightwood.downloader.core.android.model
 
-import java.util.Date
-
 import com.github.knightwood.downloader.core.android.IDownloadedHandler
 import com.github.knightwood.downloader.core.executor.IDownloadExecutor
 import com.github.knightwood.downloader.core.util.toDataUnit
@@ -26,19 +24,12 @@ class AndroidDownloadParams() {
         taskParams = TaskParams().apply(action)
         return this
     }
-
-    var logConfig: LogConfig = LogConfig()
-    fun log(action: LogConfig.() -> Unit): AndroidDownloadParams {
-        logConfig = LogConfig().apply(action)
-        return this
-    }
 }
 
 /**
  * 文件信息
  */
 class FileEntity(
-    var id: Int = 0,
     var url: String = "",
     var mimeType: String = "tmp",
     var name: String = Constant.fileName(mimeType),
@@ -61,11 +52,6 @@ class FileEntity(
         }
 }
 
-class LogConfig(
-    var enable: Boolean = false,
-    var prefix: String? = null,
-)
-
 class TaskParams {
     /**
      * 是否启用状态栏通知
@@ -74,6 +60,29 @@ class TaskParams {
      */
     var enableNotification: Boolean? = null
         get() = field ?: Downloader.enableNotification
+
+    /**
+     * 记录文件存储位置
+     */
+    var path: AndroidPath? = null
+
+    var isSupportChunkDownload: Boolean = false
+
+    /**
+     * 分块数量
+     */
+    var maxChunkCount: Int = 0
+
+    /**
+     * 最小分块大小,单位byte
+     */
+    var minChunkSize: Long = HttpConstant.MIN_CHUNK_SIZE
+
+    /**
+     * 提供自定义下载执行器
+     */
+    var downloadExecutor: IDownloadExecutor? = null
+        get() = field ?: Downloader.downloadExecutor
 
     /**
      * 提供下载通知
@@ -91,28 +100,6 @@ class TaskParams {
     var postHandler: IDownloadedHandler? = null
         get() = field ?: Downloader.postHandler
 
-    /**
-     * 记录文件存储位置
-     */
-    var path: AndroidPath? = null
-
-    var isSupportChunkDownload: Boolean = false
-
-    /**
-     * 分块数量
-     */
-    var chunkCount: Int = 0
-
-    /**
-     * 最小分块大小,单位byte
-     */
-    var minChunkSize: Long = HttpConstant.MIN_CHUNK_SIZE
-
-    /**
-     * 提供自定义下载执行器
-     */
-    var downloadExecutor: IDownloadExecutor? = null
-        get() = field ?: Downloader.downloadExecutor
 
     companion object {
 

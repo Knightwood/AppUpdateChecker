@@ -24,6 +24,7 @@ import kotlin.time.Duration.Companion.seconds
 import com.github.knightwood.downloader.core.android.Downloader
 import com.github.knightwood.downloader.core.android.filestorage.AndroidFileStorageFactory
 import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
+import com.github.knightwood.downloader.core.android.model.AndroidDownloadTaskSaveState
 import com.github.knightwood.downloader.core.android.model.AndroidPath
 import com.github.knightwood.downloader.core.android.util.Constant
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
@@ -64,6 +65,19 @@ class DownloadService : Service() {
 
         override fun stopService() {
             stopSelf()
+        }
+
+        override suspend fun saveState(): AndroidDownloadTaskSaveState {
+            return AndroidDownloadTaskSaveState(
+                infoMap = paramsMap,
+                taskSchedulerSaveState = taskMgr.saveState()
+            )
+        }
+
+        override suspend fun restoreState(state: AndroidDownloadTaskSaveState) {
+            paramsMap.clear()
+            paramsMap.putAll(state.infoMap)
+            taskMgr.restoreState(state.taskSchedulerSaveState)
         }
     }
 
@@ -116,7 +130,7 @@ class DownloadService : Service() {
             name = params.fileEntity.name,
             dirPath = Constant.emptyPath,
             isSupportChunkDownload = params.taskParams.isSupportChunkDownload,
-            chunkCount = params.taskParams.chunkCount,
+            chunkCount = params.taskParams.maxChunkCount,
             minChunkSize = params.taskParams.minChunkSize,
         )
         return DownloadTask(

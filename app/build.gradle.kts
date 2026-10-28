@@ -5,24 +5,15 @@ plugins {
 }
 
 android {
-    namespace = "com.azhon.app"
+    namespace = "com.github.knightwood.downloader.app"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.azhon.app"
+        applicationId = "com.github.knightwood.downloader.app"
         minSdk = 24
         versionCode = 1
         versionName = "1.0"
         vectorDrawables {
             useSupportLibrary = true
-        }
-    }
-
-    signingConfigs {
-        create("config") {
-            keyAlias = "appUpdate"
-            keyPassword = "123456"
-            storeFile = file("./../app.jks")
-            storePassword = "123456"
         }
     }
 
@@ -56,8 +47,7 @@ android {
 
 dependencies {
     implementation(project(":core-android"))
-//    implementation(project(":compose"))
-    implementation(project(":view"))
+    implementation(project(":ui"))
 
     implementation(libs.androidx.constraintLayout)
     implementation(libs.androidx.appCompat)
