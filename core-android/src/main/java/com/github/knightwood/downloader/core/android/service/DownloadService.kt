@@ -59,7 +59,8 @@ class DownloadService : Service() {
 
         override fun cancelTask(id: Int) {
             scope.launch {
-                taskMgr.findTaskById(id)?.cancel()
+                // 排队中的任务需要从等待队列移除, 只调用 task.cancel() 的话任务仍会开始下载
+                taskMgr.cancel(id)
             }
         }
 

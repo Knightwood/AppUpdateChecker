@@ -36,3 +36,9 @@ enum class DownloadStatusType {
         }
     }
 }
+
+/**
+ * 是否处于已提交给下载服务、正在执行的阶段
+ */
+val DownloadStatusType.isRunning: Boolean
+    get() = this == DownloadStatusType.STARTING || this == DownloadStatusType.DOWNLOADING
