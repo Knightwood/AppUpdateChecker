@@ -6,10 +6,11 @@ plugins {
 
 android {
     namespace = "com.github.knightwood.downloader.app"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
         applicationId = "com.github.knightwood.downloader.app"
         minSdk = 24
+        targetSdk =36
         versionCode = 1
         versionName = "1.0"
         vectorDrawables {
@@ -30,9 +31,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
+
     kotlinOptions {
         jvmTarget = "1.8"
     }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -61,7 +64,6 @@ dependencies {
     // Import the Compose BOM
     implementation(platform("androidx.compose:compose-bom:$bom"))
     implementation("androidx.compose.material3:material3")
-    implementation(libs.androidx.activity.compose)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -69,5 +71,6 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    implementation(libs.androidx.activity.compose)
 
 }
