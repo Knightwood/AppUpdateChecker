@@ -39,6 +39,7 @@ dependencyResolutionManagement {
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
     }
 }
+include(":app")
 include(":core")
 include(":core-android")
 include(":ui")

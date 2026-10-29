@@ -9,11 +9,10 @@ plugins {
 
 android {
     namespace = "com.github.knightwood.downloader.ui"
-    compileSdk = 36
-
+    compileSdk = 37
     defaultConfig {
         minSdk = 24
-
+        lint.targetSdk = 36
         consumerProguardFiles("consumer-rules.pro")
     }
 
@@ -64,8 +63,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
 
     // Navigation3
-    implementation("androidx.navigation3:navigation3-runtime:1.3.0-alpha02")
-    implementation("androidx.navigation3:navigation3-ui:1.3.0-alpha02")
+//    implementation("androidx.navigation3:navigation3-runtime:1.3.0-alpha02")
+//    implementation("androidx.navigation3:navigation3-ui:1.3.0-alpha02")
 
     val lifecycle_version = "2.11.0"
     // Lifecycle & ViewModel
