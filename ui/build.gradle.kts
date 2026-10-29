@@ -39,6 +39,11 @@ android {
     }
 }
 
+ksp {
+    // 导出 Room 数据库 schema，供编写数据库迁移及迁移测试使用
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     compileOnly(project(":core"))
     compileOnly(project(":core-android"))
