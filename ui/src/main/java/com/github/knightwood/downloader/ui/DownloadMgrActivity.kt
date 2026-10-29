@@ -14,40 +14,53 @@ import com.github.knightwood.downloader.core.android.service.DownloadServiceLink
 import com.github.knightwood.downloader.ui.screen.DownloadMgrScreen
 import com.github.knightwood.downloader.ui.screen.DownloadMgrScreenViewModel
 
+/**
+ * 下载任务管理器界面
+ *
+ * 绑定 [DownloadService] 后把 [DownloadServiceLinker] 交给 ViewModel，
+ * 由 ViewModel 负责提交任务、控制任务并把运行状态写回数据库。
+ */
 class DownloadMgrActivity : FragmentActivity() {
+
     val viewModel by viewModels<DownloadMgrScreenViewModel>()
-    var downloadServiceLinker: DownloadServiceLinker? = null
-    val downloadServiceConnection = object : ServiceConnection {
+
+    private var isBound = false
+
+    private val downloadServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
-            downloadServiceLinker = service as DownloadServiceLinker
+            (service as? DownloadServiceLinker)?.let { linker ->
+                viewModel.onLinkerAttached(linker)
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
-            downloadServiceLinker = null
+            viewModel.onLinkerDetached()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        linkDownloadService()
         setContent {
             DownloadMgrScreen(viewModel)
         }
+        linkDownloadService()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unbindService(downloadServiceConnection)
+        viewModel.onLinkerDetached()
+        if (isBound) {
+            runCatching { unbindService(downloadServiceConnection) }
+            isBound = false
+        }
     }
 
     private fun linkDownloadService() {
-        startService(
-            Intent(this, DownloadService::class.java)
-        )
-        bindService(
+        DownloadService.start(this)
+        isBound = bindService(
             Intent(this, DownloadService::class.java),
             downloadServiceConnection,
-            Context.BIND_AUTO_CREATE
+            Context.BIND_AUTO_CREATE,
         )
     }
 }

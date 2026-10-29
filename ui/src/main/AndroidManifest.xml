@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Android 10 以下写入系统下载目录需要存储权限 -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
     <application>
-        <activity android:name="com.DownloadMgrActivity"/>
+        <activity
+            android:name=".DownloadMgrActivity"
+            android:exported="false" />
     </application>
 </manifest>

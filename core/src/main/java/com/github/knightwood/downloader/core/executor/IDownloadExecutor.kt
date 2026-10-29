@@ -59,7 +59,8 @@ object DownloadExecutorFactory {
     }
 
     fun create(conf: DownloadTaskConf): IDownloadExecutor {
-        val chunkCount = if (conf.isSupportChunkDownload) conf.chunkCount else 0
+        // 未开启分块下载时 chunkCount 通常为0, 这里退化为单连接下载
+        val chunkCount = if (conf.isSupportChunkDownload) conf.chunkCount.coerceAtLeast(1) else 1
         return create(chunkCount, conf.minChunkSize, null)
     }
 }

@@ -173,6 +173,40 @@ fun DownloadTaskWithChunks.toSaveState(): DownloadTaskSaveState {
 //<editor-fold desc="core / core-android 模型 -> 记录">
 
 /**
+ * 由 Android 任务参数生成 core 的下载任务配置
+ *
+ * 与 `DownloadService` 内部生成任务的逻辑保持一致：
+ * Android 平台的文件位置记录在 [TaskParams.path] 中，`dirPath` 无实际意义。
+ */
+fun AndroidDownloadParams.toDownloadTaskConf(): DownloadTaskConf = DownloadTaskConf(
+    url = fileEntity.url,
+    md5 = fileEntity.md5,
+    name = fileEntity.name,
+    dirPath = Constant.emptyPath,
+    isSupportChunkDownload = taskParams.isSupportChunkDownload,
+    chunkCount = taskParams.maxChunkCount,
+    minChunkSize = taskParams.minChunkSize,
+)
+
+/**
+ * 将新建任务的参数转换为数据库记录
+ *
+ * 新任务还没有任何下载进度，状态为 [DownloadStatus.IDLE]。
+ *
+ * @param queueOrder 任务在等待队列中的顺序，-1表示不在等待队列中
+ */
+fun AndroidDownloadParams.toTaskEntity(
+    taskId: Int,
+    queueOrder: Int = -1,
+    createTime: Long = System.currentTimeMillis(),
+): DownloadTaskEntity = DownloadTaskSaveState(
+    id = taskId,
+    conf = toDownloadTaskConf(),
+    progress = null,
+    finalState = DownloadStatus.IDLE,
+).toTaskEntity(params = this, queueOrder = queueOrder, createTime = createTime)
+
+/**
  * 将任务快照转换为数据库记录
  *
  * @param params 任务在 core-android 中的参数，提供文件信息、存储位置和通知配置，
