@@ -44,13 +44,42 @@ class DownloadService : Service() {
         override val service: DownloadService
             get() = this@DownloadService
 
-        override fun submitTask(id: Int, conf: AndroidDownloadParams): DownloadTask {
+        override fun submitTask(
+            id: Int,
+            conf: AndroidDownloadParams,
+            progress: DownloadStatus.DOWNLOADING?,
+        ): DownloadTask {
+            //让旧任务排队开始下载
+            val exist = enqueueTask(id)
+            if (exist != null) return exist
+
+            //新任务
             this@DownloadService.paramsMap[id] = conf
             val task = generateTask(id, conf)
             scope.launch {
+                task.restoreProgress(progress)
                 taskMgr.submit(task)
             }
             return task
+        }
+
+        override fun enqueueTask(id: Int): DownloadTask? {
+            val exist = taskMgr.findTaskById(id)
+            if (exist != null) {
+                if (paramsMap.containsKey(id)) {
+                    scope.launch {
+                        taskMgr.enqueue(id)
+                    }
+                    return exist
+                } else {
+                    throw IllegalStateException("Task already exists but not in paramsMap")
+                }
+            } else {
+                if (paramsMap.containsKey(id)) {
+                    throw IllegalStateException("Task not exists but in paramsMap")
+                }
+            }
+            return exist
         }
 
         override fun findTask(id: Int): DownloadTask? {

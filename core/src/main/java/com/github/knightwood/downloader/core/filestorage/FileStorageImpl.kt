@@ -23,13 +23,6 @@ class FileStorageImpl(
         sink.write(source, offset, byteCount)
     }
 
-    /**
-     * 不支持文件随机位置写入
-     */
-    override fun writeAt(pos: Long, source: ByteArray, sourceOffset: Int, byteCount: Int) {
-        throw IllegalAccessError("This method should not be called")
-    }
-
     override fun flush() {
         sink.flush()
     }

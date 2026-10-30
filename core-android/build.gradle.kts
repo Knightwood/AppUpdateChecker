@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    compileSdk = 37
+    compileSdkVersion("android-37.0")
     namespace = "com.github.knightwood.downloader.core.android"
 
     defaultConfig {

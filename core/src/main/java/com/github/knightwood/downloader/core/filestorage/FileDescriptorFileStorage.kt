@@ -5,7 +5,7 @@ import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 
-class FileDescriptorFileStorage(val fd: FileDescriptor) : FileStorage {
+class FileDescriptorFileStorage(val fd: FileDescriptor) : RandomAccessFileStorage {
     val fos = FileOutputStream(fd)
     val channel: FileChannel = fos.channel
 

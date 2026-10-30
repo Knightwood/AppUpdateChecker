@@ -14,10 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -32,6 +32,7 @@ import androidx.core.content.ContextCompat
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.ui.storage.DownloadTarget
 import com.github.knightwood.downloader.ui.util.formatByteSize
+import kotlin.math.roundToInt
 
 /**
  * 新建下载任务弹窗
@@ -190,16 +191,12 @@ internal fun NewDownloadTaskContent(
             }
 
             if (state.chunkAvailable) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CHUNK_COUNT_OPTIONS.forEach { count ->
-                        FilterChip(
-                            selected = state.chunkCount == count,
-                            onClick = { onChunkCountChange(count) },
-                            label = { Text("$count 个分块") },
-                            enabled = state.chunkEnabled,
-                        )
-                    }
-                }
+                ChunkCountSlider(
+                    count = state.chunkCount,
+                    maxCount = state.maxChunkCount,
+                    enabled = state.chunkEnabled,
+                    onCountChange = onChunkCountChange,
+                )
             }
 
             state.error?.let { message ->
@@ -219,6 +216,55 @@ internal fun NewDownloadTaskContent(
                     Text(if (state.submitting) "提交中..." else "开始下载")
                 }
             }
+        }
+    }
+}
+
+/**
+ * 分块数量滑块
+ *
+ * 范围固定为 [NewTaskUiState.MIN_CHUNK_COUNT] ~ [NewTaskUiState.maxChunkCount]，
+ * 上限由“文件长度 / 最小分块大小”决定，保证每块不小于 `HttpConstant.MIN_CHUNK_SIZE`。
+ */
+@Composable
+private fun ChunkCountSlider(
+    count: Int,
+    maxCount: Int,
+    enabled: Boolean,
+    onCountChange: (Int) -> Unit,
+) {
+    val minCount = NewTaskUiState.MIN_CHUNK_COUNT
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "分块数量",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = if (maxCount > minCount) {
+                    "$count / 最多 $maxCount 个"
+                } else {
+                    "最多 $maxCount 个"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (maxCount > minCount) {
+            Slider(
+                value = count.coerceIn(minCount, maxCount).toFloat(),
+                onValueChange = { onCountChange(it.roundToInt()) },
+                valueRange = minCount.toFloat()..maxCount.toFloat(),
+                steps = maxCount - minCount - 1,
+                enabled = enabled,
+            )
+        } else {
+            Text(
+                text = "文件较小，只能分 $maxCount 块下载",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -296,5 +342,3 @@ private fun needStoragePermission(context: Context, target: DownloadTarget): Boo
         Manifest.permission.WRITE_EXTERNAL_STORAGE,
     ) != PackageManager.PERMISSION_GRANTED
 }
-
-private val CHUNK_COUNT_OPTIONS = listOf(2, 4, 6, 8)

@@ -19,10 +19,6 @@ class AndroidUriFileStorage(
         outStream.write(source, offset, byteCount)
     }
 
-    override fun writeAt(pos: Long, source: ByteArray, sourceOffset: Int, byteCount: Int) {
-        throw IllegalAccessError("This method should not be called")
-    }
-
     override fun flush() {
         outStream.flush()
     }

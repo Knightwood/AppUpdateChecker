@@ -39,7 +39,7 @@ open class DownloadTask(
     private val _stateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow(DownloadStatus.IDLE)
     val stateFlow: StateFlow<DownloadStatus> get() = _stateFlow
 
-    //当前下载进度
+    //总的下载进度百分比（0.0% ~ 100.0%）
     val progress: Flow<Double> = _stateFlow
         .filter { it is DownloadStatus.DOWNLOADING }
         .map { status ->
@@ -54,8 +54,9 @@ open class DownloadTask(
             }
         }
 
-    //最后的下载进度
-    private var currentDownloadingProgress: DownloadStatus.DOWNLOADING? = null
+    //最新的下载进度
+    private var _currentDownloadingProgress: MutableStateFlow<DownloadStatus.DOWNLOADING?> = MutableStateFlow(null)
+    val currentDownloadingProgress: StateFlow<DownloadStatus.DOWNLOADING?> get() = _currentDownloadingProgress
 
     constructor(
         saveState: DownloadTaskSaveState,
@@ -84,8 +85,15 @@ open class DownloadTask(
      * 调用此方法将挂起协程直到下载完成
      */
     suspend fun execute() {
-        if (isCancelled || isFailed) { //这是下载失败又重新下载的，需重置某些状态
+        if (isCancelled) { //这是下载失败又重新下载的，需重置某些状态
             _stateFlow.value = DownloadStatus.IDLE
+            //恢复之前取消任务时的下载进度
+            if (_currentDownloadingProgress.value != null) {
+                restoreProgress()
+            }
+        } else if (isFailed) {
+            _stateFlow.value = DownloadStatus.IDLE
+            _currentDownloadingProgress.value = null // 重置下载进度
         }
         executor.download(
             fileStorage = fileStorageProvider(),
@@ -93,7 +101,7 @@ open class DownloadTask(
         ).collect { state ->
             _stateFlow.value = state
             if (state is DownloadStatus.DOWNLOADING) {
-                currentDownloadingProgress = state
+                _currentDownloadingProgress.value = state
             }
         }
     }
@@ -149,13 +157,13 @@ open class DownloadTask(
             // 如果不停止任务直接获取进度和状态, 最终停止任务时实际下载进度与保存的进度不一致
             // 所以保存进度时需要停止任务下载,并将最终状态指定为"下载中", 而不是停止任务下载达到的"取消"状态
             cancel()
-            currentDownloadingProgress!!
+            _currentDownloadingProgress.value!!
         } else {
             _stateFlow.value
         }
         return DownloadTaskSaveState(
             id = id, conf = conf,
-            progress = currentDownloadingProgress,
+            progress = _currentDownloadingProgress.value,
             finalState = finalState
         )
     }
@@ -179,7 +187,7 @@ open class DownloadTask(
      * task.execute()
      * ```
      */
-    fun restoreProgress(progress: DownloadStatus.DOWNLOADING?): Boolean {
+    fun restoreProgress(progress: DownloadStatus.DOWNLOADING? = _currentDownloadingProgress.value): Boolean {
         if (progress == null) {
             return false
         }
@@ -203,6 +211,7 @@ val DownloadTask.isDownloading get() = stateFlow.value is DownloadStatus.DOWNLOA
 val DownloadTask.isPaused get() = stateFlow.value is DownloadStatus.PAUSED
 val DownloadTask.isFailed get() = stateFlow.value is DownloadStatus.ERROR
 val DownloadTask.isCancelled get() = stateFlow.value is DownloadStatus.CANCELED
+val DownloadTask.isFinished get() = stateFlow.value is DownloadStatus.FINISHED
 
 /**
  * 此方法根据任务当前状态映射成任务所处队列类型.

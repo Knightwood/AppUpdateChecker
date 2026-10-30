@@ -4,11 +4,12 @@ import android.app.Application
 import android.net.Uri
 import com.github.knightwood.downloader.core.filestorage.FileDescriptorFileStorage
 import com.github.knightwood.downloader.core.filestorage.FileStorage
+import com.github.knightwood.downloader.core.filestorage.RandomAccessFileStorage
 
 class AndroidUriRandomAccessFileStorage(
     path: Uri,
     application: Application,
-) : FileStorage {
+) : RandomAccessFileStorage {
     val fdFileStorage = FileDescriptorFileStorage(
         application.contentResolver.openFileDescriptor(path, "w")!!.fileDescriptor
     )
@@ -18,7 +19,7 @@ class AndroidUriRandomAccessFileStorage(
     }
 
     override fun writeAt(pos: Long, source: ByteArray, sourceOffset: Int, byteCount: Int) {
-        fdFileStorage.write(source, sourceOffset, byteCount)
+        fdFileStorage.writeAt(pos, source, sourceOffset, byteCount)
     }
 
     override fun flush() {

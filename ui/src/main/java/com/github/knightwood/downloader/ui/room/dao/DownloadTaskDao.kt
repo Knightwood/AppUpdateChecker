@@ -13,8 +13,11 @@ import kotlinx.coroutines.flow.Flow
 /**
  * 下载任务记录DAO
  *
- * 任务本身与分块进度分表存储，写进度时优先使用 [updateStatus]、[updateProgress]
- * 这类局部更新语句，避免整行覆盖导致并发写丢失字段。
+ * 任务本身与分块进度分表存储，状态更新使用 [updateStatus]、[markStarted] 这类局部更新语句，
+ * 避免整行覆盖导致并发写丢失字段。
+ *
+ * 下载速度不写入数据库，由界面直接读取运行时任务的
+ * `DownloadTask.stateFlow` / `DownloadTask.currentDownloadingProgress`。
  *
  * 带 `@Transaction` 的 open 方法为组合操作（Room 只实现抽象方法，open 方法原样保留）。
  */
@@ -174,20 +177,20 @@ abstract class DownloadTaskDao {
     )
 
     /**
-     * 更新下载进度（下载过程中高频调用，只写入进度相关列）
+     * 更新下载进度（下载过程中高频调用，只写入进度相关列, 暂时不写入速度信息）
      */
     @Query(
         "UPDATE download_task_table SET status = :status, total_size = :totalSize, " +
-            "downloaded_size = :downloadedSize, snap_speed = :snapSpeed, " +
-            "average_speed = :averageSpeed, update_time = :updateTime WHERE task_id = :taskId"
+            "downloaded_size = :downloadedSize, " +
+            "update_time = :updateTime WHERE task_id = :taskId"
     )
     abstract suspend fun updateProgress(
         taskId: Int,
         status: DownloadStatusType,
         totalSize: Long,
         downloadedSize: Long,
-        snapSpeed: Double,
-        averageSpeed: Double,
+//        snapSpeed: Double,
+//        averageSpeed: Double,
         updateTime: Long,
     )
 

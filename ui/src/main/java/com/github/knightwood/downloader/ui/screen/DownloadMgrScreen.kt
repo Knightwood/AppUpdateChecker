@@ -228,15 +228,18 @@ private fun EmptyTaskHint(modifier: Modifier = Modifier) {
 }
 
 private fun DownloadTaskItem.summaryText(): String = buildString {
-    if (totalSize > 0L) {
-        append(formatByteSize(downloadedSize))
-        append(" / ")
-        append(formatByteSize(totalSize))
-        append(" (")
-        append((progress * 100).toInt())
-        append("%)")
-    } else {
-        append("文件大小未知")
+    when {
+        totalSize <= 0L -> append("文件大小未知")
+        // 进度只存在于运行时任务中, 进程重启后的历史记录没有进度可展示
+        downloadedSize <= 0L -> append(formatByteSize(totalSize))
+        else -> {
+            append(formatByteSize(downloadedSize))
+            append(" / ")
+            append(formatByteSize(totalSize))
+            append(" (")
+            append((progress * 100).toInt())
+            append("%)")
+        }
     }
     if (state == DownloadStatusType.DOWNLOADING) {
         append(" · ")

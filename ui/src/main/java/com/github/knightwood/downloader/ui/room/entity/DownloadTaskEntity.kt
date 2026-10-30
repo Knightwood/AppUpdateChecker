@@ -135,13 +135,13 @@ data class DownloadTaskEntity(
     @ColumnInfo(name = "downloaded_size")
     val downloadedSize: Long = 0,
 
-    /** 瞬时下载速度，对应 `DownloadStatus.DOWNLOADING.snapSpeed` */
-    @ColumnInfo(name = "snap_speed")
-    val snapSpeed: Double = Double.NaN,
-
-    /** 平均下载速度，对应 `DownloadStatus.DOWNLOADING.averageSpeed` */
-    @ColumnInfo(name = "average_speed")
-    val averageSpeed: Double = Double.NaN,
+//    /** 瞬时下载速度，对应 `DownloadStatus.DOWNLOADING.snapSpeed` */
+//    @ColumnInfo(name = "snap_speed")
+//    val snapSpeed: Double = Double.NaN,
+//
+//    /** 平均下载速度，对应 `DownloadStatus.DOWNLOADING.averageSpeed` */
+//    @ColumnInfo(name = "average_speed")
+//    val averageSpeed: Double = Double.NaN,
 
     /**
      * 任务在等待队列中的顺序，对应 `TaskSchedulerSaveState.pending` 的下标

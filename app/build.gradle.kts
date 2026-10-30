@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.github.knightwood.downloader.app"
-    compileSdk = 37
+    compileSdkVersion("android-37.0")
     defaultConfig {
         applicationId = "com.github.knightwood.downloader.app"
         minSdk = 24

@@ -16,6 +16,7 @@ import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
 import com.github.knightwood.downloader.core.android.model.FileEntity
 import com.github.knightwood.downloader.core.android.model.TaskParams
 import com.github.knightwood.downloader.core.android.service.DownloadServiceLinker
+import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.util.HttpConnectionUtils
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.util.UrlResponseMeta
@@ -24,6 +25,7 @@ import com.github.knightwood.downloader.ui.room.entity.DownloadTaskEntity
 import com.github.knightwood.downloader.ui.room.model.AndroidPathType
 import com.github.knightwood.downloader.ui.room.model.DownloadStatusType
 import com.github.knightwood.downloader.ui.repository.DownloadTaskRepository
+import com.github.knightwood.downloader.ui.repository.TaskRuntimeState
 import com.github.knightwood.downloader.ui.storage.DownloadTarget
 import com.github.knightwood.downloader.ui.storage.DownloadTargetResolver
 import com.github.knightwood.downloader.ui.util.calculateProgress
@@ -35,8 +37,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -48,11 +50,17 @@ import kotlinx.coroutines.withContext
  *
  * 数据流：
  * ```
- * DownloadServiceLinker ──(stateFlow)──> DownloadTaskRepository ──(写库)──> Room
- * Room ──(observeAll)──> 任务列表 StateFlow ──> 界面
+ * DownloadServiceLinker ──(stateFlow + currentDownloadingProgress)──> DownloadTaskRepository
+ *                                          │
+ *        ┌───────────────┴───────────────┐
+ *   状态变化写库（Room）                 进度发布到内存（runtimeStates）
+ *        │                                 │
+ *        └──────────> tasks: StateFlow ──┘
+ *                          │
+ *                        界面
  * ```
- * 界面只从数据库读取任务，因此进程重启后仍能看到历史记录；
- * 运行中的任务由仓库把状态/进度持续写回数据库。
+ * 历史记录从数据库加载，运行中任务的进度直接从 [DownloadTaskRepository.runtimeStates]
+ * （即 `DownloadTask` 的 `stateFlow`/`currentDownloadingProgress`）读取，不经过数据库。
  */
 @Stable
 class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(application) {
@@ -60,9 +68,13 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
     private val dao = DownloadTaskDatabase.getInstance(application).downloadTaskDao()
     private val repository = DownloadTaskRepository(dao, viewModelScope)
 
-    /** 任务列表，按创建时间倒序 */
-    val tasks: StateFlow<List<DownloadTaskItem>> = dao.observeAll()
-        .map { records -> records.map { it.toUiItem() } }
+    /** 任务列表：数据库记录 + 服务中任务的实时状态/进度 */
+    val tasks: StateFlow<List<DownloadTaskItem>> = combine(
+        dao.observeAll(),
+        repository.runtimeStates,
+    ) { records, runtimeStates ->
+        records.map { record -> record.toUiItem(runtimeStates[record.taskId]) }
+    }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -204,7 +216,14 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
     }
 
     fun onChunkCountChanged(count: Int) {
-        _newTask.update { it.copy(chunkCount = count.coerceIn(1, MAX_CHUNK_COUNT)) }
+        _newTask.update { state ->
+            state.copy(
+                chunkCount = count.coerceIn(
+                    NewTaskUiState.MIN_CHUNK_COUNT,
+                    state.maxChunkCount,
+                ),
+            )
+        }
     }
 
     /**
@@ -231,7 +250,7 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
                         probe = ProbeState.Success(meta),
                         fileName = if (state.fileName.isBlank()) sanitizeFileName(meta.fileName) else state.fileName,
                         chunkEnabled = meta.acceptRanges && DownloadTarget.supportsParallel(state.target),
-                    )
+                    ).normalized()
                 }
             }
         }
@@ -268,10 +287,10 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
             }
 
             val useChunk = state.chunkEnabled &&
-                meta != null &&
-                meta.acceptRanges &&
-                DownloadTarget.supportsParallel(state.target) &&
-                meta.length >= HttpConstant.MIN_CHUNK_SIZE
+                    meta != null &&
+                    meta.acceptRanges &&
+                    DownloadTarget.supportsParallel(state.target) &&
+                    meta.length >= HttpConstant.MIN_CHUNK_SIZE
 
             val params = AndroidDownloadParams().apply {
                 fileEntity = FileEntity(
@@ -283,7 +302,15 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
                 taskParams = TaskParams().apply {
                     path = androidPath
                     isSupportChunkDownload = useChunk
-                    maxChunkCount = if (useChunk) state.chunkCount else 0
+                    // 每块不小于最小分块大小, 且限制在 2 ~ 128 之间
+                    maxChunkCount = if (useChunk) {
+                        state.chunkCount.coerceIn(
+                            NewTaskUiState.MIN_CHUNK_COUNT,
+                            NewTaskUiState.maxChunkCountOf(meta?.length ?: 0L),
+                        )
+                    } else {
+                        0
+                    }
                     minChunkSize = HttpConstant.MIN_CHUNK_SIZE
                 }
             }
@@ -317,29 +344,67 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
 
     //</editor-fold>
 
-    private fun DownloadTaskEntity.toUiItem(): DownloadTaskItem = DownloadTaskItem(
-        taskId = taskId,
-        name = name,
-        url = url,
-        state = status,
-        totalSize = totalSize,
-        downloadedSize = downloadedSize,
-        speed = if (status == DownloadStatusType.DOWNLOADING) snapSpeed else Double.NaN,
-        chunkCount = chunkCount,
-        chunked = isSupportChunkDownload,
-        errorMessage = errorMessage,
-        targetText = pathText(),
-    )
+    /**
+     * 把数据库记录与运行时状态合并成列表项
+     *
+     * 进度优先取内存中的 [TaskRuntimeState]，数据库不保存下载进度；
+     * 进程重启后内存状态为空，只能展示数据库中记录的历史状态。
+     */
+    private fun DownloadTaskEntity.toUiItem(runtime: TaskRuntimeState?): DownloadTaskItem {
+        return if (runtime != null) toUiItemWithRuntime(runtime) else toUiItemWithRecord()
+    }
+
+    private fun DownloadTaskEntity.toUiItemWithRuntime(runtime: TaskRuntimeState): DownloadTaskItem {
+        val downloadStatusType = DownloadStatusType.of(runtime.status)
+        //实时下载进度
+        val downloadProgressRecord = runtime.progress
+        val total = downloadProgressRecord?.length ?: size ?: totalSize
+        val downloaded = when {
+            downloadProgressRecord != null -> downloadProgressRecord.progress
+            // 已完成的任务没有运行时进度，按文件长度展示
+            downloadStatusType == DownloadStatusType.FINISHED -> total
+            else -> 0L
+        }
+        return DownloadTaskItem(
+            taskId = taskId,
+            name = name,
+            url = url,
+            state = downloadStatusType,
+            totalSize = total,
+            downloadedSize = downloaded,
+            speed = if (downloadStatusType == DownloadStatusType.DOWNLOADING) {
+                downloadProgressRecord?.snapSpeed ?: Double.NaN
+            } else {
+                Double.NaN
+            },
+            chunkCount = chunkCount,
+            chunked = isSupportChunkDownload,
+            errorMessage = (runtime?.status as? DownloadStatus.ERROR)?.e?.message ?: errorMessage,
+            targetText = pathText(),
+        )
+    }
+
+    private fun DownloadTaskEntity.toUiItemWithRecord(): DownloadTaskItem {
+        return DownloadTaskItem(
+            taskId = taskId,
+            name = name,
+            url = url,
+            state = status,
+            totalSize = this.totalSize,
+            downloadedSize = this.downloadedSize,
+            speed = Double.NaN,
+            chunkCount = chunkCount,
+            chunked = isSupportChunkDownload,
+            errorMessage = errorMessage,
+            targetText = pathText(),
+        )
+    }
 
     private fun DownloadTaskEntity.pathText(): String = when (pathType) {
         AndroidPathType.NONE -> "应用缓存目录"
         AndroidPathType.JVM -> pathValue ?: "本地文件"
         AndroidPathType.MEDIA_STORE -> "系统下载目录"
         AndroidPathType.DOCUMENT_FILE -> "自定义文件夹"
-    }
-
-    private companion object {
-        const val MAX_CHUNK_COUNT = 8
     }
 }
 
@@ -405,16 +470,56 @@ data class NewTaskUiState(
     /** 当前选择的保存位置 + 文件大小是否满足分块下载条件 */
     val chunkAvailable: Boolean
         get() = multiThreadSupported &&
-            DownloadTarget.supportsParallel(target) &&
-            (meta?.length ?: 0L) >= HttpConstant.MIN_CHUNK_SIZE
+                DownloadTarget.supportsParallel(target) &&
+                (meta?.length ?: 0L) >= HttpConstant.MIN_CHUNK_SIZE
 
     /** 实际生效的分块下载开关 */
     val useChunk: Boolean
         get() = chunkEnabled && chunkAvailable
 
+    /**
+     * 分块数量上限
+     *
+     * 由文件长度除以最小分块大小得到（保证每块不小于 `HttpConstant.MIN_CHUNK_SIZE`），
+     * 并限制在 [MIN_CHUNK_COUNT] ~ [MAX_CHUNK_COUNT] 之间。
+     */
+    val maxChunkCount: Int
+        get() = maxChunkCountOf(meta?.length ?: 0L)
+
+    /**
+     * 把分块数量收敛到当前文件允许的区间
+     *
+     * 未探测到文件信息时不处理，避免把用户的选择提前压缩成下限。
+     */
+    fun normalized(): NewTaskUiState {
+        if (meta == null) return this
+        val count = chunkCount.coerceIn(MIN_CHUNK_COUNT, maxChunkCount)
+        return if (count == chunkCount) this else copy(chunkCount = count)
+    }
+
     val canSubmit: Boolean
         get() = url.isNotBlank() &&
-            fileName.isNotBlank() &&
-            !submitting &&
-            probe !is ProbeState.Loading
+                fileName.isNotBlank() &&
+                !submitting &&
+                probe !is ProbeState.Loading
+
+    companion object {
+
+        /** 分块数量下限 */
+        const val MIN_CHUNK_COUNT = 2
+
+        /** 分块数量上限 */
+        const val MAX_CHUNK_COUNT = 128
+
+        /**
+         * 根据文件长度计算分块数量上限
+         *
+         * @param length 文件总字节数，未知时传 0
+         */
+        fun maxChunkCountOf(length: Long): Int {
+            if (length <= 0L) return MIN_CHUNK_COUNT
+            return (length / HttpConstant.MIN_CHUNK_SIZE).toInt()
+                .coerceIn(MIN_CHUNK_COUNT, MAX_CHUNK_COUNT)
+        }
+    }
 }

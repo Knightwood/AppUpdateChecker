@@ -15,8 +15,8 @@ sealed class DownloadStatus {
     data class DOWNLOADING(
         val length: Long,/*数据总长度*/
         val progress: Long,/*当前下载量*/
-        val snapSpeed: Double = Double.NaN,/*瞬时速度*/
-        val averageSpeed: Double = Double.NaN,/*平均速度*/
+        val snapSpeed: Double = Double.NaN,/*瞬时速度 单位：bytes/second */
+        val averageSpeed: Double = Double.NaN,/*平均速度 单位： bytes/second */
         val chunks: List<ChunkProgress> = emptyList(),  // 新增
     ) : DownloadStatus()
 
