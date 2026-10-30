@@ -17,11 +17,12 @@ import java.lang.Runnable
 import kotlin.coroutines.cancellation.CancellationException
 import com.github.knightwood.downloader.core.model.*
 import com.github.knightwood.downloader.core.task.currentStatus
+import com.github.knightwood.downloader.core.util.HttpConstant
 import java.io.Closeable
 
 class TaskScheduler(
     private val scope: CoroutineScope,
-    private val maxParallel: Int = 8,
+    private val maxParallel: Int = HttpConstant.MAX_PARALLEL_DOWNLOAD_COUNT,
 ) : Runnable, Closeable {
     private val logger = LoggerFactory.getLogger(TaskScheduler::class.java)
     private val mutex = Mutex()

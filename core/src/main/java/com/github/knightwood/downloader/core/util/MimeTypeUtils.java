@@ -35,8 +35,7 @@ public final class MimeTypeUtils {
 
     private static final Map<String, String> extensionToMimeTypeMap = new HashMap<String, String>();
 
-    private static final String uniType="application/octet-stream";
-    private static final String uniExt="unknow";
+    private static final String uniType = "application/octet-stream";
 
     static {
         // The following table is based on /etc/mime.types data minus
@@ -436,6 +435,7 @@ public final class MimeTypeUtils {
 
     /**
      * Returns true if the given MIME type has an entry in the map.
+     *
      * @param mimeType A MIME type (i.e. text/plain)
      * @return True iff there is a mimeType entry in the map.
      */
@@ -448,6 +448,7 @@ public final class MimeTypeUtils {
 
     /**
      * Returns the MIME type for the given extension.
+     *
      * @param extension A file extension without the leading '.'
      * @return The MIME type for the given extension or null iff there is none.
      */
@@ -455,12 +456,13 @@ public final class MimeTypeUtils {
         if (extension == null || extension.isEmpty()) {
             return uniType;
         }
-        String result=extensionToMimeTypeMap.get(extension);
-        return result==null? uniType:result;
+        String result = extensionToMimeTypeMap.get(extension);
+        return result == null ? uniType : result;
     }
 
     /**
      * Returns true if the given extension has a registered MIME type.
+     *
      * @param extension A file extension without the leading '.'
      * @return True iff there is an extension entry in the map.
      */
@@ -475,14 +477,14 @@ public final class MimeTypeUtils {
      * Returns the registered extension for the given MIME type. Note that some
      * MIME types map to multiple extensions. This call will return the most
      * common extension for the given MIME type.
+     *
      * @param mimeType A MIME type (i.e. text/plain)
      * @return The extension for the given MIME type or null iff there is none.
      */
     public static String guessExtensionFromMimeType(String mimeType) {
         if (mimeType == null || mimeType.isEmpty()) {
-            return uniExt;
+            return null;
         }
-        String result=mimeTypeToExtensionMap.get(mimeType);
-        return result==null? uniExt:result;
+        return mimeTypeToExtensionMap.get(mimeType);
     }
 }

@@ -4,9 +4,9 @@ import java.io.File
 import java.io.RandomAccessFile
 import java.util.concurrent.locks.ReentrantLock
 
-class RandomAccessFileStorage(
+class RandomAccessFileStorageImpl(
     val fileProvider: () -> File,
-) : FileStorage {
+) : RandomAccessFileStorage {
     private var isInitializer = false
     private val lock = ReentrantLock()
 

@@ -125,8 +125,8 @@ fun DownloadTaskEntity.toDownloadingStatus(
 ): DownloadStatus.DOWNLOADING = DownloadStatus.DOWNLOADING(
     length = totalSize,
     progress = downloadedSize,
-    snapSpeed = snapSpeed,
-    averageSpeed = averageSpeed,
+    snapSpeed = Double.NaN,
+    averageSpeed = Double.NaN,
     chunks = chunks.map { it.toChunkProgress() },
 )
 
@@ -248,8 +248,8 @@ fun DownloadTaskSaveState.toTaskEntity(
         errorMessage = (finalState as? DownloadStatus.ERROR)?.e?.message,
         totalSize = downloading?.length ?: 0,
         downloadedSize = downloading?.progress ?: 0,
-        snapSpeed = downloading?.snapSpeed ?: Double.NaN,
-        averageSpeed = downloading?.averageSpeed ?: Double.NaN,
+//        snapSpeed = downloading?.snapSpeed ?: Double.NaN,
+//        averageSpeed = downloading?.averageSpeed ?: Double.NaN,
         queueOrder = queueOrder,
         createTime = createTime,
         startTime = startTime,

@@ -49,15 +49,10 @@ sealed interface DownloadTarget {
 
         /**
          * 是否支持分块（多线程）下载
-         *
-         * core-android 的分块下载执行器要求 [com.github.knightwood.downloader.core.filestorage.RandomAccessFileStorage]，
-         * 以 uri 写入的 MediaStore / SAF 位置不支持随机写，会退化为单线程下载，
-         * 因此这里直接返回false，避免界面给出错误的能力提示。
+         * 之前使用uri的FileStorage实现有误，不支持随机写入。现在修好了，方法直接返回true。
          */
-        fun supportsParallel(target: DownloadTarget): Boolean = when (target) {
-            AppCache -> true
-            PublicDownloads -> Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
-            is SafDirectory -> false
+        fun supportsParallel(target: DownloadTarget): Boolean {
+            return true
         }
     }
 }

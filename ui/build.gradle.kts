@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "com.github.knightwood.downloader.ui"
-    compileSdk = 37
+    compileSdkVersion("android-37.0")
     defaultConfig {
         minSdk = 24
         lint.targetSdk = 36

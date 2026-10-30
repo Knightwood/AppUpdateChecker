@@ -17,14 +17,6 @@ interface FileStorage : Closeable, Flushable {
     @Throws(IOException::class)
     fun write(source: ByteArray, offset: Int, byteCount: Int)
 
-    /**
-     * 在文件指定位置(pos), 从source的sourceOffset位置读取byteCount字节写入文件
-     *
-     * @param pos 指定此参数,从文件指定位置写入source
-     */
-    @Throws(IOException::class)
-    fun writeAt(pos: Long, source: ByteArray, sourceOffset: Int, byteCount: Int)
-
     @Throws(IOException::class)
     override fun flush()
 
@@ -33,11 +25,16 @@ interface FileStorage : Closeable, Flushable {
 
 }
 
+interface RandomAccessFileStorage : FileStorage {
+    @Throws(IOException::class)
+    fun writeAt(pos: Long, source: ByteArray, sourceOffset: Int, byteCount: Int)
+}
+
 object FileStorageFactory {
 
     fun create(parallel: Boolean = false, fileProvider: () -> File): FileStorage {
         return if (parallel) {
-            RandomAccessFileStorage(fileProvider)
+            RandomAccessFileStorageImpl(fileProvider)
         } else {
             FileStorageImpl(fileProvider)
         }

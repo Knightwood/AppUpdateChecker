@@ -2,6 +2,7 @@ package com.github.knightwood.downloader.core.executor
 
 import com.github.knightwood.downloader.core.filestorage.FileStorage
 import com.github.knightwood.downloader.core.filestorage.RandomAccessFileStorage
+import com.github.knightwood.downloader.core.filestorage.RandomAccessFileStorageImpl
 import com.github.knightwood.downloader.core.model.ChunkProgress
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadStatus
@@ -40,7 +41,7 @@ open class MultiChunkDownloadExecutor(
     override fun download(fileStorage: FileStorage, url: String): Flow<DownloadStatus> {
         // 分块下载必须使用支持随机写的 storage
         if (fileStorage !is RandomAccessFileStorage) {
-            logger.warn( "fileStorage 不是 RandomAccessFileStorageImpl, 退化为单连接下载")
+            logger.warn( "fileStorage 不是 RandomAccessFileStorage, 退化为单连接下载")
             return super.download(fileStorage, url)
         }
         return chunkFlow(fileStorage, url).flowOn(Dispatchers.IO)
@@ -153,10 +154,10 @@ open class MultiChunkDownloadExecutor(
                 }
 
                 // 4) 完成
+                fileStorage.flush()
                 if (isShutdown) {
                     send(DownloadStatus.CANCELED)
                 } else {
-                    fileStorage.flush()
                     send(DownloadStatus.FINISHED)
                 }
             } catch (e: CancellationException) {
@@ -170,7 +171,7 @@ open class MultiChunkDownloadExecutor(
     }
 
     /**
-     * 单连接下载 (退化为父类逻辑, 但复用了 [RandomAccessFileStorage])。
+     * 单连接下载 (退化为父类逻辑, 但复用了 [RandomAccessFileStorageImpl])。
      */
     private suspend fun downloadSingle(
         fileStorage: FileStorage,
