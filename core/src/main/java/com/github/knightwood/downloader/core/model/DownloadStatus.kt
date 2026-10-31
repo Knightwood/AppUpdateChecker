@@ -29,6 +29,11 @@ sealed class DownloadStatus {
     data class ERROR(val e: Throwable) : DownloadStatus()
 
 }
+/** 是否为终态，终态之后不会再有状态变化 */
+val DownloadStatus.isTerminalState: Boolean
+    get() = this is DownloadStatus.FINISHED ||
+            this is DownloadStatus.CANCELED ||
+            this is DownloadStatus.ERROR
 
 data class ChunkProgress(
     val index: Int, //分块id

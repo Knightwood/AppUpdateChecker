@@ -101,6 +101,7 @@ open class DownloadTask(
         ).collect { state ->
             _stateFlow.value = state
             if (state is DownloadStatus.DOWNLOADING) {
+                logger.debug("downloading state {}", state)
                 _currentDownloadingProgress.value = state
             }
         }

@@ -16,7 +16,8 @@ import kotlinx.coroutines.flow.Flow
  * 任务本身与分块进度分表存储，状态更新使用 [updateStatus]、[markStarted] 这类局部更新语句，
  * 避免整行覆盖导致并发写丢失字段。
  *
- * 下载速度不写入数据库，由界面直接读取运行时任务的
+ * 下载过程中已下载长度与分块进度会节流写入（见 [updateProgress]、[syncChunks]），
+ * 用于进程重启后的断点续传；下载速度不写入数据库，由界面直接读取运行时任务的
  * `DownloadTask.stateFlow` / `DownloadTask.currentDownloadingProgress`。
  *
  * 带 `@Transaction` 的 open 方法为组合操作（Room 只实现抽象方法，open 方法原样保留）。
@@ -122,6 +123,18 @@ abstract class DownloadTaskDao {
     @Query("SELECT * FROM download_chunk_table ORDER BY task_id ASC, chunk_index ASC")
     abstract suspend fun getAllChunks(): List<DownloadChunkEntity>
 
+    /**
+     * 监听某任务的分块进度，用于界面展示每个分块的下载情况
+     */
+    @Query("SELECT * FROM download_chunk_table WHERE task_id = :taskId ORDER BY chunk_index ASC")
+    abstract fun observeChunks(taskId: Int): Flow<List<DownloadChunkEntity>>
+
+    /**
+     * 统计某任务已写入的分块记录数，用于判断分块数量是否发生变化
+     */
+    @Query("SELECT COUNT(*) FROM download_chunk_table WHERE task_id = :taskId")
+    abstract suspend fun countChunks(taskId: Int): Int
+
     //</editor-fold>
 
     //<editor-fold desc="统计">
@@ -159,6 +172,23 @@ abstract class DownloadTaskDao {
      */
     @Upsert
     abstract suspend fun upsertChunks(chunks: List<DownloadChunkEntity>)
+
+    /**
+     * 更新单个分块的进度，用于只刷已下载偏移的轻量场景
+     *
+     * @return 受影响的行数，0 表示该分块尚未插入，应改用 [upsertChunks]
+     */
+    @Query(
+        "UPDATE download_chunk_table SET start_offset = :startOffset, end_offset = :endOffset, " +
+            "downloaded = :downloaded WHERE task_id = :taskId AND chunk_index = :chunkIndex"
+    )
+    abstract suspend fun updateChunkProgress(
+        taskId: Int,
+        chunkIndex: Int,
+        startOffset: Long,
+        endOffset: Long,
+        downloaded: Long,
+    ): Int
 
     /**
      * 更新任务状态
@@ -297,6 +327,24 @@ abstract class DownloadTaskDao {
     open suspend fun replaceChunks(taskId: Int, chunks: List<DownloadChunkEntity>) {
         deleteChunks(taskId)
         if (chunks.isNotEmpty()) {
+            upsertChunks(chunks)
+        }
+    }
+
+    /**
+     * 同步任务的分块进度（下载过程中实时调用）
+     *
+     * - 分块数量未变：逐块插入/更新，不删表
+     * - 分块数量变化（重新下载、分块数调整、续传重切）：整体重建，避免旧分块残留
+     * - 任务没有分块且库里也没记录：直接返回，单连接下载不会产生写操作
+     */
+    @Transaction
+    open suspend fun syncChunks(taskId: Int, chunks: List<DownloadChunkEntity>) {
+        val stored = countChunks(taskId)
+        if (stored == 0 && chunks.isEmpty()) return
+        if (stored != chunks.size) {
+            replaceChunks(taskId, chunks)
+        } else {
             upsertChunks(chunks)
         }
     }

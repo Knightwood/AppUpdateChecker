@@ -230,7 +230,7 @@ private fun EmptyTaskHint(modifier: Modifier = Modifier) {
 private fun DownloadTaskItem.summaryText(): String = buildString {
     when {
         totalSize <= 0L -> append("文件大小未知")
-        // 进度只存在于运行时任务中, 进程重启后的历史记录没有进度可展示
+        // 没有进度快照时只展示文件总大小
         downloadedSize <= 0L -> append(formatByteSize(totalSize))
         else -> {
             append(formatByteSize(downloadedSize))

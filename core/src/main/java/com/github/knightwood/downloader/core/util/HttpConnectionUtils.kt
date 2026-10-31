@@ -54,6 +54,27 @@ object HttpConnectionUtils {
             con.disconnect()
         }
     }
+
+    /**
+     *
+     * 计算分块数量
+     *
+     * 直接使用总长度除以最小分块大小，只要不能整除, 得到的商实际上是真实分块数量-1
+     * 比如数据长度17，最小分块大小为3，那么分块数量为6，即[0,2],[3,5],[6,8],[9,11],[12,14],[15,16]
+     *
+     * @param totalLength 文件总长度
+     * @param minChunkSize 最小分块大小
+     * @return 分块数量
+     */
+    fun solveChunkCount(
+        totalLength: Long,
+        minChunkSize: Long,
+    ): Int {
+        // totalLength可能无法正好被minChunkSize整除，需要计算余数，如果余数大于0，则分块数量加1
+        val mod = totalLength % minChunkSize
+        val actualChunkCount = if (mod > 0) totalLength / minChunkSize + 1 else totalLength / minChunkSize
+        return actualChunkCount.toInt()
+    }
 }
 
 data class UrlResponseMeta(
@@ -68,5 +89,5 @@ data class UrlResponseMeta(
  * [HttpURLConnection.getContentLengthLong] JVM平台全版本可用; Android平台仅SDK 24+ 可用.
  */
 fun HttpURLConnection.contentLength(): Long {
-   return getHeaderFieldLong("content-length", -1);
+    return getHeaderFieldLong("content-length", -1);
 }

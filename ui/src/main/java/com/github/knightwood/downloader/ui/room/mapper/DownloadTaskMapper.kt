@@ -84,13 +84,13 @@ fun DownloadStatus.DOWNLOADING.toChunkEntities(taskId: Int): List<DownloadChunkE
  * `DownloadTaskConf.path` 在 Android 平台不可用，此处只还原目录与文件名
  */
 fun DownloadTaskEntity.toTaskConf(): DownloadTaskConf = DownloadTaskConf(
-    url = url,
-    md5 = md5,
-    dirPath = dirPath?.toPath() ?: Constant.emptyPath,
-    name = name,
-    isSupportChunkDownload = isSupportChunkDownload,
-    chunkCount = chunkCount,
-    minChunkSize = minChunkSize,
+    url = this@toTaskConf.url,
+    md5 = this@toTaskConf.md5,
+    dirPath = this@toTaskConf.dirPath?.toPath() ?: Constant.emptyPath,
+    name = this@toTaskConf.name,
+    isSupportChunkDownload = this@toTaskConf.isSupportChunkDownload,
+    chunkCount = this@toTaskConf.chunkCount,
+    minChunkSize = this@toTaskConf.minChunkSize,
 )
 
 /**
@@ -112,8 +112,8 @@ fun DownloadTaskEntity.toDownloadParams(): AndroidDownloadParams = AndroidDownlo
         enableNotification = this@toDownloadParams.enableNotification
         path = this@toDownloadParams.toAndroidPath()
         isSupportChunkDownload = this@toDownloadParams.isSupportChunkDownload
-        maxChunkCount = this@toDownloadParams.chunkCount
-        minChunkSize = this@toDownloadParams.minChunkSize
+        this.chunkCount = this@toDownloadParams.chunkCount
+        this.minChunkSize = this@toDownloadParams.minChunkSize
     }
 }
 
@@ -184,7 +184,7 @@ fun AndroidDownloadParams.toDownloadTaskConf(): DownloadTaskConf = DownloadTaskC
     name = fileEntity.name,
     dirPath = Constant.emptyPath,
     isSupportChunkDownload = taskParams.isSupportChunkDownload,
-    chunkCount = taskParams.maxChunkCount,
+    chunkCount = taskParams.chunkCount,
     minChunkSize = taskParams.minChunkSize,
 )
 
@@ -238,7 +238,7 @@ fun DownloadTaskSaveState.toTaskEntity(
         md5 = fileEntity?.md5 ?: conf.md5,
         dirPath = conf.dirPath.toString(),
         isSupportChunkDownload = taskParams?.isSupportChunkDownload ?: conf.isSupportChunkDownload,
-        chunkCount = taskParams?.maxChunkCount ?: conf.chunkCount,
+        chunkCount = taskParams?.chunkCount ?: conf.chunkCount,
         minChunkSize = taskParams?.minChunkSize ?: conf.minChunkSize,
         pathType = pathType,
         pathValue = pathValue,
