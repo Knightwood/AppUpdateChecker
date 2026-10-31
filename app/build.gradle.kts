@@ -51,6 +51,7 @@ android {
 dependencies {
     implementation(project(":core-android"))
     implementation(project(":ui"))
+    implementation(libs.slf4j.logback.androidlog)
 
     implementation(libs.androidx.constraintLayout)
     implementation(libs.androidx.appCompat)

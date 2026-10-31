@@ -8,4 +8,5 @@ dependencies {
     implementation(libs.kotlin.coroutines.core)
     implementation(libs.okio)
     implementation(libs.slf4j.api)
+    testImplementation(libs.slf4j.logback.jvm)
 }

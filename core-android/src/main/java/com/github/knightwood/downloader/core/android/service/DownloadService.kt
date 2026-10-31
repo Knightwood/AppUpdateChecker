@@ -160,8 +160,9 @@ class DownloadService : Service() {
             name = params.fileEntity.name,
             dirPath = Constant.emptyPath,
             isSupportChunkDownload = params.taskParams.isSupportChunkDownload,
-            chunkCount = params.taskParams.maxChunkCount,
+            chunkCount = params.taskParams.chunkCount,
             minChunkSize = params.taskParams.minChunkSize,
+            lastDownloadProgress = params.taskParams.lastDownloadProgress
         )
         return DownloadTask(
             id = id,

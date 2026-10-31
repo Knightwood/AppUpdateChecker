@@ -1,16 +1,17 @@
 package com.github.knightwood.downloader.ui.repository
 
+import android.util.Log
 import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
 import com.github.knightwood.downloader.core.android.service.DownloadServiceLinker
 import com.github.knightwood.downloader.core.model.DownloadStatus
+import com.github.knightwood.downloader.core.model.isTerminalState
 import com.github.knightwood.downloader.core.task.DownloadTask
 import com.github.knightwood.downloader.core.task.isDownloading
 import com.github.knightwood.downloader.core.task.isFinished
 import com.github.knightwood.downloader.core.task.isPaused
 import com.github.knightwood.downloader.ui.room.dao.DownloadTaskDao
-import com.github.knightwood.downloader.ui.room.entity.DownloadChunkEntity
 import com.github.knightwood.downloader.ui.room.entity.DownloadTaskEntity
-import com.github.knightwood.downloader.ui.room.mapper.toChunkEntity
+import com.github.knightwood.downloader.ui.room.mapper.toChunkEntities
 import com.github.knightwood.downloader.ui.room.mapper.toDownloadParams
 import com.github.knightwood.downloader.ui.room.mapper.toDownloadingStatus
 import com.github.knightwood.downloader.ui.room.mapper.toTaskEntity
@@ -36,19 +37,19 @@ import java.util.concurrent.ConcurrentHashMap
  * 1. 把新任务写入数据库，并提交给 `DownloadService` 执行
  * 2. 订阅任务的 [DownloadTask.stateFlow] 与 [DownloadTask.currentDownloadingProgress]，
  *    把实时状态/进度发布到内存中的 [runtimeStates]，界面直接读取展示
- * 3. 状态变化时同步写入数据库，作为进程重启后加载历史记录的数据源
+ * 3. 状态变化即时写入数据库；下载中的进度与分块进度按秒级节流写入，供断点续传使用
  * 4. 提供服务重连后的状态对齐：数据库里记录为“下载中”但服务中已不存在的任务
  *    说明进程被系统回收过，将其标记为“已暂停”，用户可手动重新下载
  * 5. 暂停、继续、停止、删除、重新下载
  *
  * 说明：`DownloadStatus.DOWNLOADING` 大约每200ms（分块下载）或1s（单连接）发射一次，
- * 这类高频进度只在内存中流转，不做任何数据库写入。
+ * 按原频率落库会造成大量写操作，因此进度与分块进度按 [PROGRESS_WRITE_INTERVAL] 节流。
  */
 class DownloadTaskRepository(
     private val dao: DownloadTaskDao,
     private val scope: CoroutineScope,
 ) {
-
+    private val TAG = "DownloadTaskRepository"
     private val mutex = Mutex()
 
     /** 每个运行中任务的进度采集协程，key为任务id */
@@ -166,7 +167,8 @@ class DownloadTaskRepository(
                 live.isDownloading -> Unit
                 live.isFinished -> Unit
                 else -> {
-                    linker.enqueueTask(taskId)
+                    val task = linker.enqueueTask(taskId)
+                    task?.let { observeTask(it) }
                 }
             }
         } else {
@@ -174,7 +176,7 @@ class DownloadTaskRepository(
             when (entity.status) {
                 DownloadStatusType.IDLE, DownloadStatusType.STARTING,
                 DownloadStatusType.FINISHED, DownloadStatusType.ERROR,
-                    -> {
+                    -> { //重新下载的，重置进度后重新提交，任务id保持不变
                     val now = System.currentTimeMillis()
                     dao.saveTask(entity.resetForRetry(lastQueueOrder++, now), emptyList())
                     observeTask(linker.submitTask(taskId, entity.toDownloadParams()))
@@ -212,8 +214,13 @@ class DownloadTaskRepository(
      * 继续下载
      */
     fun resume(taskId: Int) {
-        val task = linker?.findTask(taskId) ?: return
-        scope.launch { runCatching { task.resume() } }
+        val task = linker?.findTask(taskId)
+        if (task != null) {
+            scope.launch { runCatching { task.resume() } }
+        } else {
+            // 点击暂停后关闭app，再次打开app后点击继续下载，任务实例根本不存在，需要重新提交任务
+            scope.launch { retry(taskId) }
+        }
     }
 
     /**
@@ -265,13 +272,13 @@ class DownloadTaskRepository(
     /**
      * 采集任务的状态与进度
      *
-     * 进度直接取自 [DownloadTask.currentDownloadingProgress]（暂停/停止后仍保留最后一次快照），
-     * 只发布到内存中的 [runtimeStates] 供界面读取，不写入数据库；
-     * 数据库仅记录状态变化，用于进程重启后加载历史列表。
+     * 实时状态/进度发布到内存中的 [runtimeStates] 供界面无缝刷新；
+     * 同时按 [PROGRESS_WRITE_INTERVAL] 节流写入数据库（任务进度 + 分块进度），用于断点续传。
      */
     private fun observeTask(task: DownloadTask) {
         collectors.remove(task.id)?.cancel()
         collectors[task.id] = scope.launch {
+            var lastWriteDatabaseTime = 0L
             try {
                 combine(task.stateFlow, task.currentDownloadingProgress) { status, progress ->
                     TaskRuntimeState(status, progress)
@@ -280,13 +287,17 @@ class DownloadTaskRepository(
                     .takeWhile { runtime -> !runtime.status.isTerminalState }
                     .collect { runtime ->
                         updateTaskStateSnapshot(task.id, runtime)
-                        // 高频的下载进度不落库, 只在状态变化时写数据库
-                        if (runtime.status !is DownloadStatus.DOWNLOADING) {
+                        // 高频的下载进度按固定间隔落库, 状态变化则立即落库
+                        if (runtime.status !is DownloadStatus.DOWNLOADING
+                            || System.currentTimeMillis() - lastWriteDatabaseTime > PROGRESS_WRITE_INTERVAL
+                        ) {
                             writeState(task.id, runtime.status, runtime.progress)
+                            lastWriteDatabaseTime = System.currentTimeMillis()
                         }
                     }
                 // 终态收尾: 保留最后一帧进度供界面展示
                 val finalSnapshot = task.getStateSnapshot()
+                Log.d(TAG, "Final snapshot: $finalSnapshot")
                 updateTaskStateSnapshot(task.id, finalSnapshot)
                 writeState(task.id, finalSnapshot.status, finalSnapshot.progress)
             } finally {
@@ -295,16 +306,33 @@ class DownloadTaskRepository(
         }
     }
 
-    private suspend fun writeProgress(taskId: Int, status: DownloadStatus.DOWNLOADING, now: Long) {
+    /**
+     * 写入下载进度
+     *
+     * 随后同步该任务的分块进度，保证任务表的“已下载长度”与各分块偏移一致。
+     *
+     * @param taskId 任务id
+     * @param currentStatusTypt 当前任务状态
+     * @param snapshotProgress 当前任务进度
+     * @param updateTime 更新时间
+     */
+    private suspend fun writeProgress(
+        taskId: Int,
+        currentStatusTypt: DownloadStatusType,
+        snapshotProgress: DownloadStatus.DOWNLOADING,
+        updateTime: Long,
+    ) {
         dao.updateProgress(
             taskId = taskId,
-            status = DownloadStatusType.DOWNLOADING,
-            totalSize = status.length,
-            downloadedSize = status.progress,
+            status = currentStatusTypt,
+            totalSize = snapshotProgress.length,
+            downloadedSize = snapshotProgress.progress,
 //            snapSpeed = status.snapSpeed,
 //            averageSpeed = status.averageSpeed,
-            updateTime = now,
+            updateTime = updateTime,
         )
+        // 实时插入/更新分块进度, 单连接下载时为空列表, 不会产生写操作
+        dao.syncChunks(taskId, snapshotProgress.toChunkEntities(taskId))
     }
 
     private suspend fun writeState(
@@ -314,46 +342,66 @@ class DownloadTaskRepository(
     ) {
         val now = System.currentTimeMillis()
         when (status) {
-            DownloadStatus.IDLE -> dao.updateStatus(taskId, DownloadStatusType.IDLE, null, now)
+            DownloadStatus.IDLE -> {
+                dao.updateStatus(taskId, DownloadStatusType.IDLE, null, now)
+            }
 
-            DownloadStatus.STARTING -> dao.markStarted(taskId, DownloadStatusType.STARTING, now, now)
+            DownloadStatus.STARTING -> {
+                dao.markStarted(taskId, DownloadStatusType.STARTING, now, now)
+            }
 
             DownloadStatus.PAUSED -> {
-                snapshot?.let { writeProgress(taskId, it, now) }
+                snapshot?.let {
+                    writeProgress(
+                        taskId = taskId, currentStatusTypt = DownloadStatusType.PAUSED,
+                        snapshotProgress = it, updateTime = now
+                    )
+                }
                 dao.updateStatus(taskId, DownloadStatusType.PAUSED, null, now)
             }
 
             DownloadStatus.FINISHED -> {
-                val total = snapshot?.length ?: dao.findById(taskId)?.size ?: 0L
-                dao.updateProgress(
-                    taskId = taskId,
-                    status = DownloadStatusType.FINISHED,
-                    totalSize = total,
-                    downloadedSize = total,
-//                    snapSpeed = Double.NaN,
-//                    averageSpeed = snapshot?.averageSpeed ?: Double.NaN,
-                    updateTime = now,
-                )
+                snapshot?.let {
+                    writeProgress(
+                        taskId = taskId, currentStatusTypt = DownloadStatusType.FINISHED,
+                        snapshotProgress = it, updateTime = now
+                    )
+                }
                 dao.markEnded(taskId, DownloadStatusType.FINISHED, null, now, now)
-                dao.deleteChunks(taskId)
             }
 
             DownloadStatus.CANCELED -> {
                 snapshot?.let {
-                    writeProgress(taskId, it, now)
-                    dao.replaceChunks(taskId, it.chunks.map { chunk -> chunk.toChunkEntity(taskId) })
+                    writeProgress(
+                        taskId = taskId,
+                        currentStatusTypt = DownloadStatusType.CANCELED,
+                        snapshotProgress = it,
+                        updateTime = now
+                    )
                 }
                 dao.markEnded(taskId, DownloadStatusType.CANCELED, null, now, now)
             }
 
             is DownloadStatus.ERROR -> {
                 snapshot?.let {
-                    dao.replaceChunks(taskId, it.chunks.map { chunk -> chunk.toChunkEntity(taskId) })
+                    writeProgress(
+                        taskId = taskId,
+                        currentStatusTypt = DownloadStatusType.ERROR,
+                        snapshotProgress = it,
+                        updateTime = now
+                    )
                 }
                 dao.markEnded(taskId, DownloadStatusType.ERROR, status.e.message, now, now)
             }
 
-            is DownloadStatus.DOWNLOADING -> Unit
+            is DownloadStatus.DOWNLOADING -> {
+                writeProgress(
+                    taskId = taskId,
+                    currentStatusTypt = DownloadStatusType.DOWNLOADING,
+                    snapshotProgress = status,
+                    updateTime = now
+                )
+            }
         }
     }
 
@@ -375,25 +423,38 @@ class DownloadTaskRepository(
     )
 
     //<editor-fold desc="任务实时状态管理">
+    /**
+     * 获取任务当前的运行时状态
+     */
     private fun DownloadTask.getStateSnapshot(): TaskRuntimeState =
         TaskRuntimeState(stateFlow.value, currentDownloadingProgress.value)
 
+    /**
+     * 更新界面状态
+     */
     private fun updateTaskStateSnapshot(taskId: Int, runtime: TaskRuntimeState) {
         _runtimeStates.update { states -> states + (taskId to runtime) }
     }
 
+    /**
+     * 移除界面状态
+     */
     private fun removeTaskSnapshotState(taskId: Int) {
         _runtimeStates.update { states -> states - taskId }
     }
     //</editor-fold>
 
+    private companion object {
+        /** 下载进度落库的最小间隔，避免高频写数据库 */
+        const val PROGRESS_WRITE_INTERVAL = 1000L
+    }
 }
 
 
 /**
  * 下载任务的运行时状态
  *
- * 进度只存在于内存，不随任务记录持久化，因此进程重启后只能看到状态，进度需重新下载时才会有。
+ * 内存中的实时状态，供界面无缝刷新；数据库里另有一份秒级节流的进度快照，用于进程重启后的展示与续传。
  *
  * @param status 任务当前状态
  * @param progress 最近一次下载中的进度快照，暂停/停止后仍可读取用于展示
@@ -402,9 +463,3 @@ data class TaskRuntimeState(
     val status: DownloadStatus,
     val progress: DownloadStatus.DOWNLOADING?,
 )
-
-/** 是否为终态，终态之后不会再有状态变化 */
-private val DownloadStatus.isTerminalState: Boolean
-    get() = this is DownloadStatus.FINISHED ||
-            this is DownloadStatus.CANCELED ||
-            this is DownloadStatus.ERROR

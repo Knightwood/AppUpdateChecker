@@ -27,8 +27,13 @@ import java.util.concurrent.atomic.AtomicLongArray
  * 多线程分块下载执行器。
  *
  * - 若服务端支持 `Accept-Ranges: bytes` 且文件 >= [minChunkSize], 则并发分块。
+ * - 最后一个分块实际size可能小于其他分块, 比如分4个分块,前三个都是1Mb,最后一个可能是500K。
+ * - 若按照分块数量建议值 [chunkCount] 分块后, 除最后一个分块之外分块大小 < [minChunkSize]，则会按照 [minChunkSize] 进行分块，后面几个分块的起始-终止位置将是-1。
  * - 否则退化为 [DownloadExecutor] 的单连接下载。
  * - 每个分块可独立报告进度, 支持断点续传 (通过 [ChunkProgress.downloaded])。
+ *
+ * @param chunkCount 分块数量建议值, 默认 4; 当退化为单连接下载时, 该值无效;
+ * @param minChunkSize 最小分块大小, 默认 1M; 若文件大小小于该值, 则退化为单连接下载
  */
 open class MultiChunkDownloadExecutor(
     protected val chunkCount: Int = HttpConstant.DEFAULT_CHUNK_COUNT,
@@ -41,9 +46,10 @@ open class MultiChunkDownloadExecutor(
     override fun download(fileStorage: FileStorage, url: String): Flow<DownloadStatus> {
         // 分块下载必须使用支持随机写的 storage
         if (fileStorage !is RandomAccessFileStorage) {
-            logger.warn( "fileStorage 不是 RandomAccessFileStorage, 退化为单连接下载")
+            logger.warn("fileStorage 不是 RandomAccessFileStorage, 退化为单连接下载")
             return super.download(fileStorage, url)
         }
+        logger.info("上次进度：$lastDownloadProgress")
         return chunkFlow(fileStorage, url).flowOn(Dispatchers.IO)
     }
 
@@ -63,7 +69,7 @@ open class MultiChunkDownloadExecutor(
                 }
 
                 if (!meta.acceptRanges || meta.length < minChunkSize || chunkCount <= 1) {
-                    logger.debug( "退化为单连接下载 (acceptRanges=${meta.acceptRanges}, length=${meta.length})")
+                    logger.debug("退化为单连接下载 (acceptRanges=${meta.acceptRanges}, length=${meta.length})")
                     // 直接复用父类逻辑: 需要把 storage 转成普通 FileStorage 语义即可
                     // 但这里已经在 channelFlow 里, 不能直接调 super.download
                     // 用 downloadSingle 把父类的 saveDownloadData 逻辑跑一遍
@@ -73,7 +79,7 @@ open class MultiChunkDownloadExecutor(
 
                 // 1) 规划分块
                 val ranges = planChunks(meta.length)
-                logger.debug( "分块下载: length=${meta.length}, chunks=${ranges.size}")
+                logger.debug("分块下载: length=${meta.length}, chunks=${ranges.size}")
 
                 // 2) 进度统计
                 //记录此次下载的分块进度状态
@@ -99,19 +105,20 @@ open class MultiChunkDownloadExecutor(
                         async {
                             //上次的分块进度
                             val last = currentDownloadProgress?.chunks?.find { it ->
-                                //fixme: 仅判断index不太保险,万一索引相同,但下载起始位置不同呢?
-                                it.index == index
+                                it.index == index && it.start == start && it.end == end
                             }
                             if (last != null) {
                                 chuckProgressMap[index] = last
+                                chunkProgress.set(index, last.downloaded - start)
+                                totalProgress.addAndGet(last.downloaded - start)
                             } else {
-                                chuckProgressMap[index] = ChunkProgress(index, 0, 0, 0)
+                                chuckProgressMap[index] = ChunkProgress(index, start, end, 0)
                             }
                             downloadChunk(
                                 storage = fileStorage,
                                 url = url,
                                 index = index,
-                                start = last?.start ?: start,
+                                start = last?.downloaded ?: start, // 从上次下载的结束位置继续下载
                                 end = last?.end ?: end,
                                 onProgress = { delta ->
                                     val newTotal = totalProgress.addAndGet(delta.toLong())
@@ -128,8 +135,9 @@ open class MultiChunkDownloadExecutor(
                                         val avg = if (totalSec > 0) newTotal / totalSec else 0.0
                                         lastBytes = newTotal
                                         lastTime = now
-                                        val nowChuckProgress =
-                                            ChunkProgress(index, start, end, start + chunkProgress.get(index))
+                                        val nowChuckProgress = chuckProgressMap[index]!!.copy(
+                                            downloaded = start + chunkProgress.get(index),
+                                        )
                                         chuckProgressMap[index] = nowChuckProgress
                                         val chunks = chuckProgressMap.values.sortedBy { it.index }
                                         emitDownloadProgress(
@@ -208,6 +216,7 @@ open class MultiChunkDownloadExecutor(
             readTimeout = HttpConstant.HTTP_TIME_OUT
             connectTimeout = HttpConstant.HTTP_TIME_OUT
         }
+        logger.debug("下载分块 #$index: (Range: $start-$end)")
         try {
             val code = con.responseCode
             if (code != HttpURLConnection.HTTP_PARTIAL && code != HttpURLConnection.HTTP_OK) {
@@ -243,13 +252,29 @@ open class MultiChunkDownloadExecutor(
         }
     }
 
+    /**
+     * 计划分块
+     *
+     * @param totalLength 文件总长度
+     * @return 分块列表, 每个分块是一个 Pair, 表示分块的起始偏移和结束偏移
+     */
     protected fun planChunks(totalLength: Long): List<Pair<Long, Long>> {
-        val actualChunks = minOf(chunkCount.toLong(), (totalLength / minChunkSize).coerceAtLeast(1L)).toInt()
-        val chunkSize = totalLength / actualChunks
-        return (0 until actualChunks).map { i ->
-            val start = i * chunkSize
-            val end = if (i == actualChunks - 1) totalLength - 1 else (start + chunkSize - 1)
-            start to end
+        assert(totalLength > minChunkSize) { "文件长度必须大于最小分块大小 $minChunkSize" }
+        assert(chunkCount > 0) { "分块数量必须大于 0" }
+        val singleChunkLength = totalLength / chunkCount
+        return if (singleChunkLength >= minChunkSize) { // 按照chunkCount分块，每个分块长度≥最小分块长度
+            (0 until chunkCount).map { i ->
+                val start = i * singleChunkLength
+                val end = if (i == chunkCount - 1) totalLength - 1 else (start + singleChunkLength - 1)
+                start to end
+            }
+        } else {// 按照chunkCount分块，分块长度小于最小分块长度，则按照最小分块长度分块，最后 chunkCount - actualChunkCount 个分块起始- 终止位置将设置为-1
+            val actualChunkCount = HttpConnectionUtils.solveChunkCount(totalLength, minChunkSize)
+            (0 until actualChunkCount).map { i ->
+                val start = i * minChunkSize
+                val end = if (i == actualChunkCount - 1) totalLength - 1 else (start + minChunkSize - 1)
+                start to end
+            }//.plus(0 until chunkCount - actualChunkCount).map { -1L to -1L } // 追加剩余无效分块
         }
     }
 }

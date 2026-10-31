@@ -302,16 +302,16 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
                 taskParams = TaskParams().apply {
                     path = androidPath
                     isSupportChunkDownload = useChunk
-                    // 每块不小于最小分块大小, 且限制在 2 ~ 128 之间
-                    maxChunkCount = if (useChunk) {
+                    // 每块不小于最小分块大小, 且限制在 1 ~ 128 之间
+                    chunkCount = if (useChunk) {
                         state.chunkCount.coerceIn(
                             NewTaskUiState.MIN_CHUNK_COUNT,
-                            NewTaskUiState.maxChunkCountOf(meta?.length ?: 0L),
+                            NewTaskUiState.maxChunkCountOf(meta.length, state.minChunkSize),
                         )
                     } else {
                         0
                     }
-                    minChunkSize = HttpConstant.MIN_CHUNK_SIZE
+                    minChunkSize = state.minChunkSize
                 }
             }
 
@@ -347,13 +347,17 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
     /**
      * 把数据库记录与运行时状态合并成列表项
      *
-     * 进度优先取内存中的 [TaskRuntimeState]，数据库不保存下载进度；
-     * 进程重启后内存状态为空，只能展示数据库中记录的历史状态。
+     * 进度优先取内存中的 [TaskRuntimeState]（逐帧刷新），
+     * 没有运行时状态（进程重启后的历史记录）时回退到数据库中的秒级快照。
      */
     private fun DownloadTaskEntity.toUiItem(runtime: TaskRuntimeState?): DownloadTaskItem {
         return if (runtime != null) toUiItemWithRuntime(runtime) else toUiItemWithRecord()
     }
 
+    /**
+     * @receiver 数据库记录
+     * @param runtime 任务运行中的实时状态
+     */
     private fun DownloadTaskEntity.toUiItemWithRuntime(runtime: TaskRuntimeState): DownloadTaskItem {
         val downloadStatusType = DownloadStatusType.of(runtime.status)
         //实时下载进度
@@ -363,7 +367,7 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
             downloadProgressRecord != null -> downloadProgressRecord.progress
             // 已完成的任务没有运行时进度，按文件长度展示
             downloadStatusType == DownloadStatusType.FINISHED -> total
-            else -> 0L
+            else -> this.downloadedSize
         }
         return DownloadTaskItem(
             taskId = taskId,
@@ -377,7 +381,7 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
             } else {
                 Double.NaN
             },
-            chunkCount = chunkCount,
+            chunkCount = this@toUiItemWithRuntime.chunkCount,
             chunked = isSupportChunkDownload,
             errorMessage = (runtime?.status as? DownloadStatus.ERROR)?.e?.message ?: errorMessage,
             targetText = pathText(),
@@ -393,7 +397,7 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
             totalSize = this.totalSize,
             downloadedSize = this.downloadedSize,
             speed = Double.NaN,
-            chunkCount = chunkCount,
+            chunkCount = this@toUiItemWithRecord.chunkCount,
             chunked = isSupportChunkDownload,
             errorMessage = errorMessage,
             targetText = pathText(),
@@ -455,7 +459,10 @@ data class NewTaskUiState(
     val target: DownloadTarget = DownloadTarget.AppCache,
     val probe: ProbeState = ProbeState.Idle,
     val chunkEnabled: Boolean = false,
-    val chunkCount: Int = HttpConstant.DEFAULT_CHUNK_COUNT,
+    /* 最小分块长度，单位字节，后续会从datastore中加载赋值，所以不能删除此变量并在代码中固定使用 HttpConstant.MIN_CHUNK_SIZE */
+    val minChunkSize: Long = HttpConstant.MIN_CHUNK_SIZE,
+    /* 当前分块数量 */
+    val chunkCount: Int = 1,
     val submitting: Boolean = false,
     val error: String? = null,
 ) {
@@ -471,7 +478,7 @@ data class NewTaskUiState(
     val chunkAvailable: Boolean
         get() = multiThreadSupported &&
                 DownloadTarget.supportsParallel(target) &&
-                (meta?.length ?: 0L) >= HttpConstant.MIN_CHUNK_SIZE
+                (meta?.length ?: 0L) >= minChunkSize
 
     /** 实际生效的分块下载开关 */
     val useChunk: Boolean
@@ -480,11 +487,11 @@ data class NewTaskUiState(
     /**
      * 分块数量上限
      *
-     * 由文件长度除以最小分块大小得到（保证每块不小于 `HttpConstant.MIN_CHUNK_SIZE`），
+     * 由文件长度除以最小分块大小得到（保证每块不小于 minChunkSize），
      * 并限制在 [MIN_CHUNK_COUNT] ~ [MAX_CHUNK_COUNT] 之间。
      */
     val maxChunkCount: Int
-        get() = maxChunkCountOf(meta?.length ?: 0L)
+        get() = maxChunkCountOf(meta?.length ?: 1L, minChunkSize)
 
     /**
      * 把分块数量收敛到当前文件允许的区间
@@ -515,11 +522,12 @@ data class NewTaskUiState(
          * 根据文件长度计算分块数量上限
          *
          * @param length 文件总字节数，未知时传 0
+         * @param minChunkSize 最小分块大小，单位字节
          */
-        fun maxChunkCountOf(length: Long): Int {
+        fun maxChunkCountOf(length: Long, minChunkSize: Long): Int {
             if (length <= 0L) return MIN_CHUNK_COUNT
-            return (length / HttpConstant.MIN_CHUNK_SIZE).toInt()
-                .coerceIn(MIN_CHUNK_COUNT, MAX_CHUNK_COUNT)
+            val actualChunkCount = HttpConnectionUtils.solveChunkCount(length, minChunkSize)
+            return actualChunkCount.coerceIn(MIN_CHUNK_COUNT, MAX_CHUNK_COUNT)
         }
     }
 }

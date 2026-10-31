@@ -60,6 +60,8 @@ koin-annotations = { module = "io.insert-koin:koin-annotations", version.ref = "
 
 slf4j-api = { module = "org.slf4j:slf4j-api", version = "2.0.15" }
 slf4j-api-kotlin = { module = "com.github.knightwood:slf4j-api-kotlin", version = "0.0.7" }
+slf4j-logback-androidlog = { module = "uk.uuid.slf4j:slf4j-android", version = "2.0.17-0" }
+slf4j-logback-jvm = { module = "ch.qos.logback:logback-classic", version = "1.5.12" }
 
 
 [plugins]
