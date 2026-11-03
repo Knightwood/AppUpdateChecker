@@ -105,7 +105,7 @@ class TaskScheduler(
                 task.execute()
             }
         } catch (e: CancellationException) {
-            throw e
+            logger.error("task inner canceled, but we should not handle it", e)
         } catch (e: Throwable) {
             logger.error("task failed", e)
         }
@@ -181,9 +181,7 @@ class TaskScheduler(
     suspend fun restoreState(
         saveStates: TaskSchedulerSaveState,
         taskProvider: (DownloadTaskSaveState) -> DownloadTask = {
-            DownloadTask(
-                id = it.id, conf = it.conf,
-            ).apply { restoreProgress(it.progress) }
+            DownloadTask(id = it.id, conf = it.conf)
         },
     ) {
         pending.clear()

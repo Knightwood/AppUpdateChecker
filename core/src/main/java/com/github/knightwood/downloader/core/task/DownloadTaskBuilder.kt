@@ -1,6 +1,7 @@
 package com.github.knightwood.downloader.core.task
 
 import com.github.knightwood.downloader.core.filestorage.FileStorageFactory
+import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
@@ -15,7 +16,7 @@ import org.slf4j.LoggerFactory
 class DownloadTaskBuilder(
     private val id: Int,
     private var conf: DownloadTaskConf,
-    private var downloadProgress: DownloadStatus.DOWNLOADING? = null,
+    private var downloadProgress: DownloadProgressRecord? = null,
 ) {
     private val logger = LoggerFactory.getLogger("DownloadTaskBuilder")
     private var dirPath: Path? = null
@@ -60,7 +61,7 @@ class DownloadTaskBuilder(
         return this
     }
 
-    fun restoreProgress(state: DownloadStatus.DOWNLOADING): DownloadTaskBuilder {
+    fun restoreProgress(state: DownloadProgressRecord): DownloadTaskBuilder {
         this.downloadProgress = state
         return this
     }

@@ -4,6 +4,7 @@ import com.github.knightwood.downloader.core.filestorage.FileStorage
 import com.github.knightwood.downloader.core.filestorage.RandomAccessFileStorage
 import com.github.knightwood.downloader.core.filestorage.RandomAccessFileStorageImpl
 import com.github.knightwood.downloader.core.model.ChunkProgress
+import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.util.HttpConnectionUtils
@@ -38,7 +39,7 @@ import java.util.concurrent.atomic.AtomicLongArray
 open class MultiChunkDownloadExecutor(
     protected val chunkCount: Int = HttpConstant.DEFAULT_CHUNK_COUNT,
     protected val minChunkSize: Long = HttpConstant.MIN_CHUNK_SIZE,
-    lastDownloadProgress: DownloadStatus.DOWNLOADING? = null,
+    lastDownloadProgress: DownloadProgressRecord? = null,
 ) : DownloadExecutor(lastDownloadProgress) {
     override val isSupportRestoreState: Boolean = true
     private val logger = LoggerFactory.getLogger(MultiChunkDownloadExecutor::class.java)
@@ -85,8 +86,8 @@ open class MultiChunkDownloadExecutor(
                 //记录此次下载的分块进度状态
                 val chuckProgressMap = mutableMapOf<Int, ChunkProgress>()
                 //记录此次下载的总进度状态
-                var currentDownloadProgress: DownloadStatus.DOWNLOADING? = lastDownloadProgress
-                fun emitDownloadProgress(progress: DownloadStatus.DOWNLOADING) {
+                var currentDownloadProgress: DownloadProgressRecord? = lastDownloadProgress
+                fun emitDownloadProgress(progress: DownloadProgressRecord) {
                     currentDownloadProgress = progress
                     trySend(progress)
                 }
@@ -141,7 +142,7 @@ open class MultiChunkDownloadExecutor(
                                         chuckProgressMap[index] = nowChuckProgress
                                         val chunks = chuckProgressMap.values.sortedBy { it.index }
                                         emitDownloadProgress(
-                                            DownloadStatus.DOWNLOADING(
+                                            DownloadProgressRecord(
                                                 length = meta.length,
                                                 progress = newTotal,
                                                 snapSpeed = instant,
@@ -259,22 +260,10 @@ open class MultiChunkDownloadExecutor(
      * @return 分块列表, 每个分块是一个 Pair, 表示分块的起始偏移和结束偏移
      */
     protected fun planChunks(totalLength: Long): List<Pair<Long, Long>> {
-        assert(totalLength > minChunkSize) { "文件长度必须大于最小分块大小 $minChunkSize" }
-        assert(chunkCount > 0) { "分块数量必须大于 0" }
-        val singleChunkLength = totalLength / chunkCount
-        return if (singleChunkLength >= minChunkSize) { // 按照chunkCount分块，每个分块长度≥最小分块长度
-            (0 until chunkCount).map { i ->
-                val start = i * singleChunkLength
-                val end = if (i == chunkCount - 1) totalLength - 1 else (start + singleChunkLength - 1)
-                start to end
-            }
-        } else {// 按照chunkCount分块，分块长度小于最小分块长度，则按照最小分块长度分块，最后 chunkCount - actualChunkCount 个分块起始- 终止位置将设置为-1
-            val actualChunkCount = HttpConnectionUtils.solveChunkCount(totalLength, minChunkSize)
-            (0 until actualChunkCount).map { i ->
-                val start = i * minChunkSize
-                val end = if (i == actualChunkCount - 1) totalLength - 1 else (start + minChunkSize - 1)
-                start to end
-            }//.plus(0 until chunkCount - actualChunkCount).map { -1L to -1L } // 追加剩余无效分块
-        }
+        return HttpConnectionUtils.planChunks(
+            totalLength = totalLength,
+            chunkCount = chunkCount,
+            minChunkSize = minChunkSize,
+        )
     }
 }

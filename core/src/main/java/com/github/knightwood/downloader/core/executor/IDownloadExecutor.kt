@@ -2,6 +2,7 @@ package com.github.knightwood.downloader.core.executor
 
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.filestorage.FileStorage
+import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import kotlinx.coroutines.flow.Flow
@@ -16,7 +17,7 @@ interface IDownloadExecutor {
      *         .download(fileStorage,url)
      * ```
      */
-    fun restoreState(saveState: DownloadStatus.DOWNLOADING): IDownloadExecutor = this
+    fun restoreState(saveState: DownloadProgressRecord): IDownloadExecutor = this
 
     /**
      * download apk from apkUrl
@@ -56,7 +57,7 @@ object DownloadExecutorFactory {
     fun create(
         chunkCount: Int = 1,
         minChunkSize: Long = HttpConstant.MIN_CHUNK_SIZE,
-        lastDownloadProgress: DownloadStatus.DOWNLOADING? = null,
+        lastDownloadProgress: DownloadProgressRecord? = null,
     ): IDownloadExecutor {
         check(chunkCount > 0) { "chunkCount must be > 0" }
         return if (chunkCount > 1) {
