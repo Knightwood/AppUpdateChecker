@@ -56,6 +56,38 @@ object HttpConnectionUtils {
     }
 
     /**
+     * 计划分块
+     *
+     * @param chunkCount 分块数量
+     * @param minChunkSize 最小分块大小，单位字节，totalLength小于该大小将不进行分块
+     * @param totalLength 文件总长度
+     * @return 分块列表, 每个分块是一个 Pair, 表示分块的起始偏移和结束偏移
+     */
+    fun planChunks(
+        chunkCount: Int,
+        minChunkSize: Long,
+        totalLength: Long,
+    ): List<Pair<Long, Long>> {
+        assert(totalLength > minChunkSize) { "文件长度必须大于最小分块大小 $minChunkSize" }
+        assert(chunkCount > 0) { "分块数量必须大于 0" }
+        val singleChunkLength = totalLength / chunkCount
+        return if (singleChunkLength >= minChunkSize) { // 按照chunkCount分块，每个分块长度≥最小分块长度
+            (0 until chunkCount).map { i ->
+                val start = i * singleChunkLength
+                val end = if (i == chunkCount - 1) totalLength - 1 else (start + singleChunkLength - 1)
+                start to end
+            }
+        } else {// 按照chunkCount分块，分块长度小于最小分块长度，则按照最小分块长度分块，最后 chunkCount - actualChunkCount 个分块起始- 终止位置将设置为-1
+            val actualChunkCount = HttpConnectionUtils.solveChunkCount(totalLength, minChunkSize)
+            (0 until actualChunkCount).map { i ->
+                val start = i * minChunkSize
+                val end = if (i == actualChunkCount - 1) totalLength - 1 else (start + minChunkSize - 1)
+                start to end
+            }//.plus(0 until chunkCount - actualChunkCount).map { -1L to -1L } // 追加剩余无效分块
+        }
+    }
+
+    /**
      *
      * 计算分块数量
      *

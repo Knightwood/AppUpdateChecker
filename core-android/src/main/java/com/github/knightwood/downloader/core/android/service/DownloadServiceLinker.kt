@@ -3,6 +3,7 @@ package com.github.knightwood.downloader.core.android.service
 import android.os.Binder
 import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
 import com.github.knightwood.downloader.core.android.model.AndroidDownloadTaskSaveState
+import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.model.DownloadTaskSaveState
 import com.github.knightwood.downloader.core.task.DownloadTask
@@ -17,12 +18,10 @@ abstract class DownloadServiceLinker : Binder() {
      *
      * @param id 任务id
      * @param conf 下载任务配置
-     * @param progress 下载进度, 默认为null. 用于指定任务的初始进度
      */
     abstract fun submitTask(
         id: Int,
         conf: AndroidDownloadParams,
-        progress: DownloadStatus.DOWNLOADING? = null,
     ): DownloadTask
 
     /**

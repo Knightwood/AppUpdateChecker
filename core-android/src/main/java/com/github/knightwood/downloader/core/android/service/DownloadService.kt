@@ -30,8 +30,12 @@ import com.github.knightwood.downloader.core.android.util.Constant
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import com.github.knightwood.downloader.core.executor.DownloadExecutorFactory
 import com.github.knightwood.downloader.core.model.DownloadStatus
+import com.github.knightwood.downloader.core.model.isTerminalState
 import com.github.knightwood.downloader.core.task.DownloadTask
+import com.github.knightwood.downloader.core.task.currentStatus
 import com.github.knightwood.downloader.core.taskmgr.TaskScheduler
+import kotlinx.coroutines.currentCoroutineContext
+import kotlin.coroutines.cancellation.CancellationException
 
 class DownloadService : Service() {
     private val scope: CoroutineScope =
@@ -47,7 +51,6 @@ class DownloadService : Service() {
         override fun submitTask(
             id: Int,
             conf: AndroidDownloadParams,
-            progress: DownloadStatus.DOWNLOADING?,
         ): DownloadTask {
             //让旧任务排队开始下载
             val exist = enqueueTask(id)
@@ -57,7 +60,9 @@ class DownloadService : Service() {
             this@DownloadService.paramsMap[id] = conf
             val task = generateTask(id, conf)
             scope.launch {
-                task.restoreProgress(progress)
+                // 用户可能手动指定DownloadExecutor实例，这会破坏通过DownloadExecutorFactory创建实例时的进度恢复功能
+                // 所以在这里手动执行一次恢复进度
+                task.restoreProgress(conf.taskParams.lastDownloadProgress)
                 taskMgr.submit(task)
             }
             return task
@@ -119,7 +124,7 @@ class DownloadService : Service() {
         Downloader.mNotifier.createNotificationChannel(applicationContext)
         taskMgr.run()
         taskMgr.setActiveTaskProcessor { currTask ->
-            scope.launch {
+            scope.launch(CoroutineName("processTaskState${currTask.id}")) {
                 processTaskState(currTask)
             }
         }
@@ -206,13 +211,14 @@ class DownloadService : Service() {
                 bomb = null
             }
             if (state is DownloadStatus.FINISHED) {
-                params.taskParams.postHandler?.process(
-                    context = this@DownloadService,
-                    path = params.taskParams.path,
-                    taskId = currTask.id,
-                    params = params,
-                )
-
+                scope.launch {
+                    params.taskParams.postHandler?.process(
+                        context = this@DownloadService,
+                        path = params.taskParams.path,
+                        taskId = currTask.id,
+                        params = params,
+                    )
+                }
                 if (Downloader.shutdownAfterDownloaded && taskMgr.isEmpty()) {
                     //当前任务结束且没有其他任务,10s后停止服务
                     bomb = scope.launch {
@@ -220,6 +226,12 @@ class DownloadService : Service() {
                         stopSelf()
                     }
                 }
+            }
+            // 任务结束，取消当前协程
+            if (state.isTerminalState) {
+                currentCoroutineContext().cancel(
+                    CancellationException("Task ${currTask.id} is ${currTask.currentStatus.name}, canceling coroutine")
+                )
             }
         }
     }

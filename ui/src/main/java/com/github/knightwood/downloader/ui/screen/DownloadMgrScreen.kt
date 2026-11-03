@@ -203,8 +203,18 @@ private fun DownloadTaskCard(
                         TextButton(onClick = { viewModel.cancel(task.taskId) }) { Text("停止") }
                     }
 
-                    else -> {
-                        TextButton(onClick = { viewModel.retry(task.taskId) }) { Text("重新下载") }
+                    //fixme: 任务快速反复的点击停止和恢复，任务会恢复下载，界面不再更新
+                    DownloadStatusType.CANCELED -> {
+                        TextButton(onClick = { viewModel.retry(task.taskId) }) { Text("恢复") }
+                    }
+
+                    //fixme: 任务遇到bad FileDescriptor点击重试，会重新开始下载，但是界面没有更新
+                    DownloadStatusType.ERROR -> {
+                        TextButton(onClick = { viewModel.retry(task.taskId) }) { Text("重试") }
+                    }
+
+                    DownloadStatusType.FINISHED -> {
+                        // 不处理
                     }
                 }
                 TextButton(onClick = { viewModel.delete(task.taskId) }) { Text("删除") }

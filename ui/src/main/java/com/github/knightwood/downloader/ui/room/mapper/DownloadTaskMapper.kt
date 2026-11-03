@@ -7,6 +7,7 @@ import com.github.knightwood.downloader.core.android.model.FileEntity
 import com.github.knightwood.downloader.core.android.model.TaskParams
 import com.github.knightwood.downloader.core.android.util.Constant
 import com.github.knightwood.downloader.core.model.ChunkProgress
+import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import com.github.knightwood.downloader.core.model.DownloadTaskSaveState
@@ -96,7 +97,7 @@ fun DownloadTaskEntity.toTaskConf(): DownloadTaskConf = DownloadTaskConf(
 /**
  * 还原下载任务参数，用于重新提交到下载服务
  */
-fun DownloadTaskEntity.toDownloadParams(): AndroidDownloadParams = AndroidDownloadParams().apply {
+fun DownloadTaskEntity.toDownloadParams(chunks: List<DownloadChunkEntity> = emptyList()): AndroidDownloadParams = AndroidDownloadParams().apply {
     fileEntity = FileEntity(
         url = this@toDownloadParams.url,
         mimeType = this@toDownloadParams.mimeType ?: "tmp",
@@ -114,15 +115,18 @@ fun DownloadTaskEntity.toDownloadParams(): AndroidDownloadParams = AndroidDownlo
         isSupportChunkDownload = this@toDownloadParams.isSupportChunkDownload
         this.chunkCount = this@toDownloadParams.chunkCount
         this.minChunkSize = this@toDownloadParams.minChunkSize
+        this.lastDownloadProgress = this@toDownloadParams.toDownloadingStatus(chunks)
     }
 }
 
 /**
  * 将记录中的总长度、已下载长度、速度组装为下载中状态，用于断点续传
+ * @param chunks 分块进度记录
+ * @return [DownloadProgressRecord] 下载进度
  */
 fun DownloadTaskEntity.toDownloadingStatus(
     chunks: List<DownloadChunkEntity> = emptyList(),
-): DownloadStatus.DOWNLOADING = DownloadStatus.DOWNLOADING(
+): DownloadProgressRecord = DownloadStatus.DOWNLOADING(
     length = totalSize,
     progress = downloadedSize,
     snapSpeed = Double.NaN,

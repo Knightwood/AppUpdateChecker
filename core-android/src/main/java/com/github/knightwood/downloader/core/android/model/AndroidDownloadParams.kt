@@ -9,6 +9,7 @@ import com.github.knightwood.downloader.core.android.Downloader.authorities
 import com.github.knightwood.downloader.core.android.service.ApkUpdateNotifierImpl
 import com.github.knightwood.downloader.core.android.service.INotifier
 import com.github.knightwood.downloader.core.android.util.ApkUtil
+import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.task.DownloadTask
@@ -84,7 +85,7 @@ class TaskParams {
      * 上次的下载进度，用于执行旧任务时恢复进度，断点续传
      * 为了恢复任务进度，除了传递此参数，还可以创建任务后使用[DownloadTask.restoreProgress]恢复进度
      */
-    var lastDownloadProgress : DownloadStatus.DOWNLOADING? = null
+    var lastDownloadProgress : DownloadProgressRecord? = null
 
     /**
      * 提供自定义下载执行器

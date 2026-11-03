@@ -43,7 +43,7 @@ data class DownloadTaskConf(
      * 上次的下载进度，用于执行旧任务时恢复进度，断点续传
      * 为了恢复任务进度，除了传递此参数，还可以创建任务后使用[DownloadTask.restoreProgress]恢复进度
      */
-    var lastDownloadProgress: DownloadStatus.DOWNLOADING? = null,
+    var lastDownloadProgress: DownloadProgressRecord? = null,
 ) {
     /**
      * 文件路径

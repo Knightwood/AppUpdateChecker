@@ -3,6 +3,7 @@ package com.github.knightwood.downloader.core.executor
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.filestorage.FileStorage
+import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.util.contentLength
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -27,7 +28,7 @@ import javax.net.ssl.X509TrustManager
 
 
 open class DownloadExecutor(
-    protected var lastDownloadProgress: DownloadStatus.DOWNLOADING? = null,
+    protected var lastDownloadProgress: DownloadProgressRecord? = null,
 ) : IDownloadExecutor {
     private val logger = LoggerFactory.getLogger(DownloadExecutor::class.java)
     override val isSupportRestoreState: Boolean = false
@@ -42,7 +43,7 @@ open class DownloadExecutor(
         }
         get() = pauseSignal.value
 
-    override fun restoreState(saveState: DownloadStatus.DOWNLOADING): IDownloadExecutor {
+    override fun restoreState(saveState: DownloadProgressRecord): IDownloadExecutor {
         lastDownloadProgress = saveState
         return this
     }

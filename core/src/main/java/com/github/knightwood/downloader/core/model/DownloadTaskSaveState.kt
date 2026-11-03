@@ -11,6 +11,6 @@ package com.github.knightwood.downloader.core.model
 data class DownloadTaskSaveState(
     val id: Int,
     val conf: DownloadTaskConf,
-    val progress: DownloadStatus.DOWNLOADING? = null,
+    val progress: DownloadProgressRecord? = null,
     val finalState: DownloadStatus,
 )

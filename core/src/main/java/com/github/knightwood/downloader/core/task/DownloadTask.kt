@@ -15,6 +15,7 @@ import com.github.knightwood.downloader.core.executor.DownloadExecutorFactory
 import com.github.knightwood.downloader.core.executor.IDownloadExecutor
 import com.github.knightwood.downloader.core.filestorage.FileStorage
 import com.github.knightwood.downloader.core.filestorage.FileStorageFactory
+import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.model.DownloadTaskSaveState
@@ -36,27 +37,12 @@ open class DownloadTask(
 ) {
     private val logger = LoggerFactory.getLogger("DownloadTask#$id")
     private val executor: IDownloadExecutor by lazy { executorProvider() }
+    //任务状态
     private val _stateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow(DownloadStatus.IDLE)
     val stateFlow: StateFlow<DownloadStatus> get() = _stateFlow
-
-    //总的下载进度百分比（0.0% ~ 100.0%）
-    val progress: Flow<Double> = _stateFlow
-        .filter { it is DownloadStatus.DOWNLOADING }
-        .map { status ->
-            if (status is DownloadStatus.DOWNLOADING) {
-                val max = status.length
-                val progress = status.progress
-                val curr = (progress / max * 100.0)
-                logger.debug("downloading max: $max --- progress: $progress")
-                curr
-            } else {
-                0.0
-            }
-        }
-
     //最新的下载进度
-    private var _currentDownloadingProgress: MutableStateFlow<DownloadStatus.DOWNLOADING?> = MutableStateFlow(null)
-    val currentDownloadingProgress: StateFlow<DownloadStatus.DOWNLOADING?> get() = _currentDownloadingProgress
+    private var _currentDownloadingProgress: MutableStateFlow<DownloadProgressRecord?> = MutableStateFlow(null)
+    val currentDownloadingProgress: StateFlow<DownloadProgressRecord?> get() = _currentDownloadingProgress
 
     constructor(
         saveState: DownloadTaskSaveState,
@@ -85,15 +71,12 @@ open class DownloadTask(
      * 调用此方法将挂起协程直到下载完成
      */
     suspend fun execute() {
-        if (isCancelled) { //这是下载失败又重新下载的，需重置某些状态
+        if (isCancelled||isFailed) { //这是下载失败又重新下载的，需重置某些状态
             _stateFlow.value = DownloadStatus.IDLE
             //恢复之前取消任务时的下载进度
             if (_currentDownloadingProgress.value != null) {
                 restoreProgress()
             }
-        } else if (isFailed) {
-            _stateFlow.value = DownloadStatus.IDLE
-            _currentDownloadingProgress.value = null // 重置下载进度
         }
         executor.download(
             fileStorage = fileStorageProvider(),
@@ -101,8 +84,10 @@ open class DownloadTask(
         ).collect { state ->
             _stateFlow.value = state
             if (state is DownloadStatus.DOWNLOADING) {
-                logger.debug("downloading state {}", state)
+                logger.debug("downloading progress {}", state)
                 _currentDownloadingProgress.value = state
+            } else if (state is DownloadStatus.ERROR){
+                logger.error("download failed", state.e)
             }
         }
     }
@@ -188,7 +173,7 @@ open class DownloadTask(
      * task.execute()
      * ```
      */
-    fun restoreProgress(progress: DownloadStatus.DOWNLOADING? = _currentDownloadingProgress.value): Boolean {
+    fun restoreProgress(progress: DownloadProgressRecord? = _currentDownloadingProgress.value): Boolean {
         if (progress == null) {
             return false
         }

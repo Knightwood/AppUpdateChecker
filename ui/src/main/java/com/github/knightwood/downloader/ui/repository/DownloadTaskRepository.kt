@@ -3,6 +3,7 @@ package com.github.knightwood.downloader.ui.repository
 import android.util.Log
 import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
 import com.github.knightwood.downloader.core.android.service.DownloadServiceLinker
+import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.model.isTerminalState
 import com.github.knightwood.downloader.core.task.DownloadTask
@@ -13,12 +14,12 @@ import com.github.knightwood.downloader.ui.room.dao.DownloadTaskDao
 import com.github.knightwood.downloader.ui.room.entity.DownloadTaskEntity
 import com.github.knightwood.downloader.ui.room.mapper.toChunkEntities
 import com.github.knightwood.downloader.ui.room.mapper.toDownloadParams
-import com.github.knightwood.downloader.ui.room.mapper.toDownloadingStatus
 import com.github.knightwood.downloader.ui.room.mapper.toTaskEntity
 import com.github.knightwood.downloader.ui.room.model.DownloadStatusType
 import com.github.knightwood.downloader.ui.room.model.isRunning
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -113,9 +114,12 @@ class DownloadTaskRepository(
             if (task != null) {
                 // 服务仍在下载（例如界面重建），重新采集进度
                 observeTask(task)
-            } else if (entity.status.isRunning) {
-                // 进程被回收，运行状态已丢失
-                dao.updateStatus(entity.taskId, DownloadStatusType.PAUSED, null, now)
+            } else {
+                if (entity.status.isRunning) {
+                    // 进程被回收，运行状态已丢失
+                    dao.updateStatus(entity.taskId, DownloadStatusType.PAUSED, null, now)
+                }
+                //其余状态没有处理
             }
         }
     }
@@ -156,43 +160,48 @@ class DownloadTaskRepository(
      *
      * - 其他情况（已完成/失败/排队中）：重置进度后重新提交，任务id保持不变
      */
-    suspend fun retry(taskId: Int): Result<Unit> = runCatching {
-        val linker = linker ?: error("下载服务尚未连接，请稍后重试")
-        val (entity, chunkProgress) = dao.findWithChunks(taskId) ?: error("任务记录不存在")
-        val live = linker.findTask(taskId)
-        if (live != null) {
-            // 任务已实例化且存在于任务管理器
-            when {
-                live.isPaused -> scope.launch { live.resume() }
-                live.isDownloading -> Unit
-                live.isFinished -> Unit
-                else -> {
-                    val task = linker.enqueueTask(taskId)
-                    task?.let { observeTask(it) }
+    suspend fun retry(taskId: Int): Result<Unit> {
+        val result = runCatching {
+            val linker = linker ?: error("下载服务尚未连接，请稍后重试")
+            val (entity, chunkProgress) = dao.findWithChunks(taskId) ?: error("任务记录不存在")
+            val live = linker.findTask(taskId)
+            if (live != null) {
+                // 任务已实例化且存在于任务管理器
+                when {
+                    live.isPaused -> scope.launch { live.resume() }
+                    live.isDownloading -> Unit
+                    live.isFinished -> Unit
+                    else -> {
+                        val task = linker.enqueueTask(taskId)
+                        task?.let { observeTask(it) } ?: error("任务不存在")
+                    }
                 }
-            }
-        } else {
-            //从数据库读取出来的任务
-            when (entity.status) {
-                DownloadStatusType.IDLE, DownloadStatusType.STARTING,
-                DownloadStatusType.FINISHED, DownloadStatusType.ERROR,
-                    -> { //重新下载的，重置进度后重新提交，任务id保持不变
-                    val now = System.currentTimeMillis()
-                    dao.saveTask(entity.resetForRetry(lastQueueOrder++, now), emptyList())
-                    observeTask(linker.submitTask(taskId, entity.toDownloadParams()))
-                }
+            } else {
+                //从数据库读取出来的任务
+                when (entity.status) {
+                    DownloadStatusType.IDLE, DownloadStatusType.STARTING,
+                    DownloadStatusType.FINISHED, DownloadStatusType.ERROR,
+                        -> { //重新下载的，重置进度后重新提交，任务id保持不变
+                        val now = System.currentTimeMillis()
+                        dao.saveTask(entity.resetForRetry(lastQueueOrder++, now), emptyList())
+                        observeTask(linker.submitTask(taskId, entity.toDownloadParams(chunkProgress)))
+                    }
 
-                DownloadStatusType.DOWNLOADING, DownloadStatusType.PAUSED, DownloadStatusType.CANCELED -> {
-                    //恢复下载任务状态且提交任务执行下载
-                    observeTask(
-                        linker.submitTask(
-                            id = taskId, conf = entity.toDownloadParams(),
-                            progress = entity.toDownloadingStatus(chunkProgress)
+                    DownloadStatusType.DOWNLOADING, DownloadStatusType.PAUSED, DownloadStatusType.CANCELED -> {
+                        //恢复下载任务状态且提交任务执行下载
+                        observeTask(
+                            linker.submitTask(
+                                id = taskId, conf = entity.toDownloadParams(chunkProgress),
+                            )
                         )
-                    )
+                    }
                 }
             }
+            Unit
+        }.onFailure {
+            Log.e(TAG, "任务重试失败", it)
         }
+        return result
     }
 
     //</editor-fold>
@@ -216,7 +225,11 @@ class DownloadTaskRepository(
     fun resume(taskId: Int) {
         val task = linker?.findTask(taskId)
         if (task != null) {
-            scope.launch { runCatching { task.resume() } }
+            if (task.isPaused) {
+                scope.launch { runCatching { task.resume() } }
+            } else {
+                scope.launch { retry(taskId) }
+            }
         } else {
             // 点击暂停后关闭app，再次打开app后点击继续下载，任务实例根本不存在，需要重新提交任务
             scope.launch { retry(taskId) }
@@ -276,14 +289,19 @@ class DownloadTaskRepository(
      * 同时按 [PROGRESS_WRITE_INTERVAL] 节流写入数据库（任务进度 + 分块进度），用于断点续传。
      */
     private fun observeTask(task: DownloadTask) {
+        Log.d(TAG, "Observing task: ${task.id}")
         collectors.remove(task.id)?.cancel()
         collectors[task.id] = scope.launch {
+            //延迟500ms观察flow，避免在重启任务时观察到任务状态是终止态导致flow不再收集
+            delay(500)
             var lastWriteDatabaseTime = 0L
             try {
+                Log.d(TAG, "Observing task: ${task.id}")
                 combine(task.stateFlow, task.currentDownloadingProgress) { status, progress ->
                     TaskRuntimeState(status, progress)
                 }
                     // stateFlow 是不会结束的热流, 到达终态后主动结束采集, 避免协程常驻
+                    // fixme: 已实例化的任务反复的停止后点击继续，在点击继续时，这里会观察到任务状态是canceled，导致不再观察状态变更，界面不更新
                     .takeWhile { runtime -> !runtime.status.isTerminalState }
                     .collect { runtime ->
                         updateTaskStateSnapshot(task.id, runtime)
@@ -298,7 +316,9 @@ class DownloadTaskRepository(
                 // 终态收尾: 保留最后一帧进度供界面展示
                 val finalSnapshot = task.getStateSnapshot()
                 Log.d(TAG, "Final snapshot: $finalSnapshot")
+                //更新UI状态
                 updateTaskStateSnapshot(task.id, finalSnapshot)
+                //写入数据库
                 writeState(task.id, finalSnapshot.status, finalSnapshot.progress)
             } finally {
                 collectors.remove(task.id)
@@ -338,7 +358,7 @@ class DownloadTaskRepository(
     private suspend fun writeState(
         taskId: Int,
         status: DownloadStatus,
-        snapshot: DownloadStatus.DOWNLOADING?,
+        progress: DownloadProgressRecord?,
     ) {
         val now = System.currentTimeMillis()
         when (status) {
@@ -351,7 +371,7 @@ class DownloadTaskRepository(
             }
 
             DownloadStatus.PAUSED -> {
-                snapshot?.let {
+                progress?.let {
                     writeProgress(
                         taskId = taskId, currentStatusTypt = DownloadStatusType.PAUSED,
                         snapshotProgress = it, updateTime = now
@@ -361,7 +381,7 @@ class DownloadTaskRepository(
             }
 
             DownloadStatus.FINISHED -> {
-                snapshot?.let {
+                progress?.let {
                     writeProgress(
                         taskId = taskId, currentStatusTypt = DownloadStatusType.FINISHED,
                         snapshotProgress = it, updateTime = now
@@ -371,7 +391,7 @@ class DownloadTaskRepository(
             }
 
             DownloadStatus.CANCELED -> {
-                snapshot?.let {
+                progress?.let {
                     writeProgress(
                         taskId = taskId,
                         currentStatusTypt = DownloadStatusType.CANCELED,
@@ -383,7 +403,7 @@ class DownloadTaskRepository(
             }
 
             is DownloadStatus.ERROR -> {
-                snapshot?.let {
+                progress?.let {
                     writeProgress(
                         taskId = taskId,
                         currentStatusTypt = DownloadStatusType.ERROR,
@@ -461,5 +481,5 @@ class DownloadTaskRepository(
  */
 data class TaskRuntimeState(
     val status: DownloadStatus,
-    val progress: DownloadStatus.DOWNLOADING?,
+    val progress: DownloadProgressRecord?,
 )
