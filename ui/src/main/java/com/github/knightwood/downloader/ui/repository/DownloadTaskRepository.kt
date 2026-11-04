@@ -292,16 +292,14 @@ class DownloadTaskRepository(
         Log.d(TAG, "Observing task: ${task.id}")
         collectors.remove(task.id)?.cancel()
         collectors[task.id] = scope.launch {
-            //延迟500ms观察flow，避免在重启任务时观察到任务状态是终止态导致flow不再收集
-            delay(500)
             var lastWriteDatabaseTime = 0L
             try {
                 Log.d(TAG, "Observing task: ${task.id}")
-                combine(task.stateFlow, task.currentDownloadingProgress) { status, progress ->
+                //使用 sharedFlow，避免在重启任务时观察到任务状态是终止态导致flow不再收集
+                combine(task.eventFlow, task.currentDownloadingProgress) { status, progress ->
                     TaskRuntimeState(status, progress)
                 }
-                    // stateFlow 是不会结束的热流, 到达终态后主动结束采集, 避免协程常驻
-                    // fixme: 已实例化的任务反复的停止后点击继续，在点击继续时，这里会观察到任务状态是canceled，导致不再观察状态变更，界面不更新
+                    // eventFlow 是不会结束的热流, 到达终态后主动结束采集, 避免协程常驻
                     .takeWhile { runtime -> !runtime.status.isTerminalState }
                     .collect { runtime ->
                         updateTaskStateSnapshot(task.id, runtime)
@@ -339,7 +337,7 @@ class DownloadTaskRepository(
     private suspend fun writeProgress(
         taskId: Int,
         currentStatusTypt: DownloadStatusType,
-        snapshotProgress: DownloadStatus.DOWNLOADING,
+        snapshotProgress: DownloadProgressRecord,
         updateTime: Long,
     ) {
         dao.updateProgress(
@@ -418,7 +416,7 @@ class DownloadTaskRepository(
                 writeProgress(
                     taskId = taskId,
                     currentStatusTypt = DownloadStatusType.DOWNLOADING,
-                    snapshotProgress = status,
+                    snapshotProgress = status.progress,
                     updateTime = now
                 )
             }

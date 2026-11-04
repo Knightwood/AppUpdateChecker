@@ -72,7 +72,7 @@ fun ChunkProgress.toChunkEntity(taskId: Int): DownloadChunkEntity = DownloadChun
 /**
  * 将下载中状态里的分块进度转换为分块记录
  */
-fun DownloadStatus.DOWNLOADING.toChunkEntities(taskId: Int): List<DownloadChunkEntity> =
+fun DownloadProgressRecord.toChunkEntities(taskId: Int): List<DownloadChunkEntity> =
     chunks.map { it.toChunkEntity(taskId) }
 
 //</editor-fold>
@@ -115,7 +115,7 @@ fun DownloadTaskEntity.toDownloadParams(chunks: List<DownloadChunkEntity> = empt
         isSupportChunkDownload = this@toDownloadParams.isSupportChunkDownload
         this.chunkCount = this@toDownloadParams.chunkCount
         this.minChunkSize = this@toDownloadParams.minChunkSize
-        this.lastDownloadProgress = this@toDownloadParams.toDownloadingStatus(chunks)
+        this.lastDownloadProgress = this@toDownloadParams.toDownloadProgressRecord(chunks)
     }
 }
 
@@ -124,9 +124,9 @@ fun DownloadTaskEntity.toDownloadParams(chunks: List<DownloadChunkEntity> = empt
  * @param chunks 分块进度记录
  * @return [DownloadProgressRecord] 下载进度
  */
-fun DownloadTaskEntity.toDownloadingStatus(
+fun DownloadTaskEntity.toDownloadProgressRecord(
     chunks: List<DownloadChunkEntity> = emptyList(),
-): DownloadProgressRecord = DownloadStatus.DOWNLOADING(
+): DownloadProgressRecord = DownloadProgressRecord(
     length = totalSize,
     progress = downloadedSize,
     snapSpeed = Double.NaN,
@@ -142,7 +142,7 @@ fun DownloadTaskEntity.toDownloadStatus(
 ): DownloadStatus = when (status) {
     DownloadStatusType.IDLE -> DownloadStatus.IDLE
     DownloadStatusType.STARTING -> DownloadStatus.STARTING
-    DownloadStatusType.DOWNLOADING -> toDownloadingStatus(chunks)
+    DownloadStatusType.DOWNLOADING -> DownloadStatus.DOWNLOADING(toDownloadProgressRecord(chunks))
     DownloadStatusType.PAUSED -> DownloadStatus.PAUSED
     DownloadStatusType.FINISHED -> DownloadStatus.FINISHED
     DownloadStatusType.CANCELED -> DownloadStatus.CANCELED
@@ -160,7 +160,7 @@ fun DownloadTaskEntity.toDownloadStatus(
 fun DownloadTaskWithChunks.toSaveState(): DownloadTaskSaveState {
     val finalState = task.toDownloadStatus(chunks)
     val progress = if (finalState is DownloadStatus.DOWNLOADING || task.downloadedSize > 0) {
-        task.toDownloadingStatus(chunks)
+        task.toDownloadProgressRecord(chunks)
     } else {
         null
     }

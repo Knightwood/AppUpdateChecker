@@ -52,6 +52,12 @@ data class DownloadChunkEntity(
     @ColumnInfo(name = "downloaded")
     val downloaded: Long,
 ) {
+
+    val isFinished: Boolean
+        get() {
+            return downloaded == endOffset
+        }
+
     companion object {
         const val TABLE_NAME = "download_chunk_table"
         const val COLUMN_TASK_ID = "task_id"
