@@ -49,35 +49,54 @@ val DownloadStatus.isTerminalState: Boolean
 /**
  * @param index 分块id
  * @param start 分块在下载文件中的起始位置(包含)
- * @param downloaded 已下载到的绝对偏移(这是个位置, 大于等于start, 小于等于end, 不是下载总量)
+ * @param pos 已下载到的绝对偏移(大于等于start, 小于等于end，相对0开始到数据长度的位置)
  * @param end 分块在下载文件中的结束位置(包含)
+ * @param downloaded 已下载长度
  */
 data class ChunkProgress(
     val index: Int,
     val start: Long,
     val end: Long,
     val downloaded: Long,
-){
+) {
+    val pos: Long
+        get() {
+            val lng = start + downloaded - 1
+            if (lng < 0) return 0
+            return lng
+        }
+
+    /**
+     * 是否完成
+     */
     val isFinished: Boolean
         get() {
-            return downloaded == end
+            return pos == end
         }
 }
 
+/**
+ *  下载进度记录
+ *  @param length 数据总长度
+ *  @param downloaded 当前下载量
+ *  @param snapSpeed 瞬时速度 单位：bytes/second
+ *  @param averageSpeed 平均速度 单位： bytes/second
+ *  @param chunks 分块下载进度列表
+ */
 data class DownloadProgressRecord(
-    val length: Long,/*数据总长度*/
-    val progress: Long,/*当前下载量*/
-    val snapSpeed: Double = Double.NaN,/*瞬时速度 单位：bytes/second */
-    val averageSpeed: Double = Double.NaN,/*平均速度 单位： bytes/second */
-    val chunks: List<ChunkProgress> = emptyList(),  // 新增
+    val length: Long,
+    val downloaded: Long,
+    val snapSpeed: Double = Double.NaN,
+    val averageSpeed: Double = Double.NaN,
+    val chunks: List<ChunkProgress> = emptyList(),
 ) {
     /**
      * 当前下载进度百分比
      */
     val percentage: Double
         get() {
-            val max = length
-            val curr = (progress / max * 100.0)
+            if (length == 0L) return 0.0
+            val curr = (downloaded * 1.0 / length) * 100.0
             return curr
         }
 }

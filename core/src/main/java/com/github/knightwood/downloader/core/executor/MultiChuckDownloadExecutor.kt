@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicLongArray
  * - 最后一个分块实际size可能小于其他分块, 比如分4个分块,前三个都是1Mb,最后一个可能是500K。
  * - 若按照分块数量建议值 [chunkCount] 分块后, 除最后一个分块之外分块大小 < [minChunkSize]，则会按照 [minChunkSize] 进行分块，后面几个分块的起始-终止位置将是-1。
  * - 否则退化为 [DownloadExecutor] 的单连接下载。
- * - 每个分块可独立报告进度, 支持断点续传 (通过 [ChunkProgress.downloaded])。
+ * - 每个分块可独立报告进度, 支持断点续传 (通过 [ChunkProgress.pos])。
  *
  * @param chunkCount 分块数量建议值, 默认 4; 当退化为单连接下载时, 该值无效;
  * @param minChunkSize 最小分块大小, 默认 1M; 若文件大小小于该值, 则退化为单连接下载
@@ -103,6 +103,7 @@ open class MultiChunkDownloadExecutor(
                     if (now - lastEmitTime >= 200_000_000L) { // 200ms更新一次
                         lastEmitTime = now
                         val newTotalReadByteLength = totalDownloadedLength.get()
+                        check(newTotalReadByteLength >= 0) { "newTotalReadByteLength must be >= 0" }
                         // channelFlow 的 send 是 suspend, 但 onProgress 是同步回调
                         // 用 trySend 避免阻塞下载线程
                         val elapsed = (now - lastTime) / 1e9
@@ -115,7 +116,7 @@ open class MultiChunkDownloadExecutor(
 
                         val oldValue = chuckProgressMap[index]!!
                         val newValue = oldValue.copy(
-                            downloaded = oldValue.start + chunkDownloadedLengths.get(index) - 1,
+                            downloaded = chunkDownloadedLengths.get(index),
                         )
                         chuckProgressMap.replace(index, oldValue, newValue)
 
@@ -124,7 +125,7 @@ open class MultiChunkDownloadExecutor(
                             DownloadStatus.DOWNLOADING(
                                 DownloadProgressRecord(
                                     length = meta.length,
-                                    progress = newTotalReadByteLength,
+                                    downloaded = newTotalReadByteLength,
                                     snapSpeed = instant,
                                     averageSpeed = avg,
                                     chunks = chunks,
@@ -145,8 +146,8 @@ open class MultiChunkDownloadExecutor(
                             }
                             if (last != null) {
                                 chuckProgressMap[index] = last
-                                chunkDownloadedLengths.set(index, last.downloaded - start + 1)
-                                totalDownloadedLength.addAndGet(last.downloaded - start + 1)
+                                chunkDownloadedLengths.set(index, last.downloaded)
+                                totalDownloadedLength.addAndGet(last.downloaded)
                             } else {
                                 chuckProgressMap[index] = ChunkProgress(index, start, end, 0)
                             }
@@ -158,7 +159,7 @@ open class MultiChunkDownloadExecutor(
                                 storage = fileStorage,
                                 url = url,
                                 index = index,
-                                downloadStartOffset = last?.downloaded ?: start, // 从上次下载的结束位置继续下载
+                                downloadStartOffset = last?.pos ?: start, // 从上次下载的结束位置继续下载
                                 downloadEndOffset = end,
                                 onProgress = { delta ->
                                     // 累积每个分块的下载总量/读取的字节数

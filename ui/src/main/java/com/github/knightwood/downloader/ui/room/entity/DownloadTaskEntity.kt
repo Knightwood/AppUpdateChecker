@@ -127,19 +127,19 @@ data class DownloadTaskEntity(
     @ColumnInfo(name = "error_message")
     val errorMessage: String? = null,
 
-    /** 文件总长度，对应 `DownloadStatus.DOWNLOADING.length` */
+    /** 文件总长度，对应 `DownloadProgressRecord.length` */
     @ColumnInfo(name = "total_size")
     val totalSize: Long = 0,
 
-    /** 已下载长度，对应 `DownloadStatus.DOWNLOADING.progress` */
+    /** 已下载长度，对应 `DownloadProgressRecord.downloaded` */
     @ColumnInfo(name = "downloaded_size")
     val downloadedSize: Long = 0,
 
-//    /** 瞬时下载速度，对应 `DownloadStatus.DOWNLOADING.snapSpeed` */
+//    /** 瞬时下载速度，对应 `DownloadProgressRecord.snapSpeed` */
 //    @ColumnInfo(name = "snap_speed")
 //    val snapSpeed: Double = Double.NaN,
 //
-//    /** 平均下载速度，对应 `DownloadStatus.DOWNLOADING.averageSpeed` */
+//    /** 平均下载速度，对应 `DownloadProgressRecord.averageSpeed` */
 //    @ColumnInfo(name = "average_speed")
 //    val averageSpeed: Double = Double.NaN,
 

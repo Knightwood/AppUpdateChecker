@@ -48,14 +48,17 @@ data class DownloadChunkEntity(
     @ColumnInfo(name = "end_offset")
     val endOffset: Long,
 
-    /** 已下载到的绝对偏移，对应 `ChunkProgress.downloaded` */
+    /** 已下载到字节数，对应 `ChunkProgress.downloaded` */
     @ColumnInfo(name = "downloaded")
     val downloaded: Long,
 ) {
 
     val isFinished: Boolean
         get() {
-            return downloaded == endOffset
+            if (endOffset == startOffset) {
+                return downloaded == 0L
+            }
+            return downloaded == (endOffset - startOffset + 1)
         }
 
     companion object {

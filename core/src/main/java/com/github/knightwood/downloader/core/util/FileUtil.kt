@@ -80,9 +80,9 @@ val Long?.toDataUnit: String?
             return "${this}B"
         }
         if (this < 1024 * 1024) {
-            return "${this / 1024}KB"
+            return "${ "%.2f".format( this / 1024)}KB"
         }
-        return "${this / 1024 / 1024}MB"
+        return "${ "%.2f".format(this / 1024 / 1024)}MB"
     }
 
 val Double?.toDataUnit: String?
@@ -94,7 +94,7 @@ val Double?.toDataUnit: String?
             return "${this}B"
         }
         if (this < 1024 * 1024) {
-            return "${this / 1024}KB"
+            return "${ "%.2f".format(this / 1024)}KB"
         }
-        return "${this / 1024 / 1024}MB"
+        return "${ "%.2f".format(this / 1024 / 1024)}MB"
     }
