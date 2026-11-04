@@ -194,7 +194,7 @@ class DownloadService : Service() {
     private suspend fun processTaskState(currTask: DownloadTask) {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         val params = paramsMap[currTask.id]!!
-        currTask.stateFlow.collect { state ->
+        currTask.eventFlow.collect { state ->
             if (params.taskParams.enableNotification == true) {
                 val notifier = params.taskParams.mNotifier!!
                 val notification = notifier.notificationOf(

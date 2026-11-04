@@ -21,6 +21,7 @@ import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.model.DownloadTaskSaveState
 import com.github.knightwood.downloader.core.model.TaskQueueType
 import com.github.knightwood.downloader.core.taskmgr.TaskScheduler
+import kotlinx.coroutines.flow.MutableSharedFlow
 import org.slf4j.LoggerFactory
 
 /**
@@ -37,7 +38,10 @@ open class DownloadTask(
 ) {
     private val logger = LoggerFactory.getLogger("DownloadTask#$id")
     private val executor: IDownloadExecutor by lazy { executorProvider() }
-    //任务状态
+    //任务状态的事件流
+    private val _eventFlow: MutableSharedFlow<DownloadStatus> = MutableSharedFlow(0)
+    val eventFlow: Flow<DownloadStatus> get() = _eventFlow
+    // 任务状态流
     private val _stateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow(DownloadStatus.IDLE)
     val stateFlow: StateFlow<DownloadStatus> get() = _stateFlow
     //最新的下载进度
@@ -83,9 +87,11 @@ open class DownloadTask(
             url = conf.url
         ).collect { state ->
             _stateFlow.value = state
+            _eventFlow.emit(state)
+
             if (state is DownloadStatus.DOWNLOADING) {
                 logger.debug("downloading progress {}", state)
-                _currentDownloadingProgress.value = state
+                _currentDownloadingProgress.value = state.progress
             } else if (state is DownloadStatus.ERROR){
                 logger.error("download failed", state.e)
             }
@@ -139,18 +145,15 @@ open class DownloadTask(
      * @return 如果任务处于idle/starting状态，下载进度可能为null
      */
     suspend fun saveState(): DownloadTaskSaveState {
-        val finalState = if (isDownloading) {
+        if (isDownloading) {
             // 如果不停止任务直接获取进度和状态, 最终停止任务时实际下载进度与保存的进度不一致
             // 所以保存进度时需要停止任务下载,并将最终状态指定为"下载中", 而不是停止任务下载达到的"取消"状态
             cancel()
-            _currentDownloadingProgress.value!!
-        } else {
-            _stateFlow.value
         }
         return DownloadTaskSaveState(
             id = id, conf = conf,
             progress = _currentDownloadingProgress.value,
-            finalState = finalState
+            finalState = _stateFlow.value
         )
     }
 

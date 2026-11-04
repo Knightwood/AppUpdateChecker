@@ -110,7 +110,7 @@ open class DownloadExecutor(
                             val totalSec = (System.nanoTime() - startTime) / 1_000_000_000.0
                             val avg = totalBytes / totalSec
                             logger.info("完成: $totalBytes 字节, 平均 ${"%.2f".format(avg / 1024 / 1024)} MB/s")
-                            onStatusChanged(DownloadStatus.DOWNLOADING(length, totalBytes, instant, avg))
+                            onStatusChanged(DownloadStatus.DOWNLOADING(DownloadProgressRecord(length, totalBytes, instant, avg)))
                         }
 
                         if (isPaused) {

@@ -9,18 +9,19 @@ import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.util.HttpConnectionUtils
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.sync.Mutex
 import okio.buffer
 import okio.source
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicLongArray
 
@@ -43,8 +44,10 @@ open class MultiChunkDownloadExecutor(
 ) : DownloadExecutor(lastDownloadProgress) {
     override val isSupportRestoreState: Boolean = true
     private val logger = LoggerFactory.getLogger(MultiChunkDownloadExecutor::class.java)
+    private var isTerminated = false
 
     override fun download(fileStorage: FileStorage, url: String): Flow<DownloadStatus> {
+        isTerminated = false
         // 分块下载必须使用支持随机写的 storage
         if (fileStorage !is RandomAccessFileStorage) {
             logger.warn("fileStorage 不是 RandomAccessFileStorage, 退化为单连接下载")
@@ -83,90 +86,116 @@ open class MultiChunkDownloadExecutor(
                 logger.debug("分块下载: length=${meta.length}, chunks=${ranges.size}")
 
                 // 2) 进度统计
-                //记录此次下载的分块进度状态
-                val chuckProgressMap = mutableMapOf<Int, ChunkProgress>()
-                //记录此次下载的总进度状态
-                var currentDownloadProgress: DownloadProgressRecord? = lastDownloadProgress
-                fun emitDownloadProgress(progress: DownloadProgressRecord) {
-                    currentDownloadProgress = progress
-                    trySend(progress)
-                }
-                //记录当前每个分块下载量
-                val chunkProgress = AtomicLongArray(ranges.size)
-                val totalProgress = AtomicLong(0)
-                val progressLock = Mutex()
-                var lastEmitTime = 0L
+                val updateProgressSignal = Channel<Int>()
+                // 记录此次下载的所有分块进度状态
+                val chuckProgressMap = ConcurrentHashMap<Int, ChunkProgress>()
+                // 记录当前每个分块下载量
+                val chunkDownloadedLengths = AtomicLongArray(ranges.size)
+                // 记录此次下载的总下载量
+                val totalDownloadedLength = AtomicLong(0)
                 val startTime = System.nanoTime()
                 var lastBytes = 0L
                 var lastTime = startTime
+                var lastEmitTime = 0L
+
+                fun updateProgress(index: Int) {
+                    val now = System.nanoTime()
+                    if (now - lastEmitTime >= 200_000_000L) { // 200ms更新一次
+                        lastEmitTime = now
+                        val newTotalReadByteLength = totalDownloadedLength.get()
+                        // channelFlow 的 send 是 suspend, 但 onProgress 是同步回调
+                        // 用 trySend 避免阻塞下载线程
+                        val elapsed = (now - lastTime) / 1e9
+                        val instant = if (elapsed > 0) (newTotalReadByteLength - lastBytes) / elapsed else 0.0
+                        lastBytes = newTotalReadByteLength
+                        lastTime = now
+
+                        val totalSec = (now - startTime) / 1e9
+                        val avg = if (totalSec > 0) newTotalReadByteLength / totalSec else 0.0
+
+                        val oldValue = chuckProgressMap[index]!!
+                        val newValue = oldValue.copy(
+                            downloaded = oldValue.start + chunkDownloadedLengths.get(index) - 1,
+                        )
+                        chuckProgressMap.replace(index, oldValue, newValue)
+
+                        val chunks = chuckProgressMap.values.sortedBy { it.index }
+                        trySend(
+                            DownloadStatus.DOWNLOADING(
+                                DownloadProgressRecord(
+                                    length = meta.length,
+                                    progress = newTotalReadByteLength,
+                                    snapSpeed = instant,
+                                    averageSpeed = avg,
+                                    chunks = chunks,
+                                )
+                            )
+                        )
+                    }
+                }
 
                 // 3) 并发下载
                 coroutineScope<Unit> {
+                    // 创建下载任务
                     val jobs = ranges.mapIndexed { index, (start, end) ->
                         async {
                             //上次的分块进度
-                            val last = currentDownloadProgress?.chunks?.find { it ->
+                            val last = lastDownloadProgress?.chunks?.find { it ->
                                 it.index == index && it.start == start && it.end == end
                             }
                             if (last != null) {
                                 chuckProgressMap[index] = last
-                                chunkProgress.set(index, last.downloaded - start)
-                                totalProgress.addAndGet(last.downloaded - start)
+                                chunkDownloadedLengths.set(index, last.downloaded - start + 1)
+                                totalDownloadedLength.addAndGet(last.downloaded - start + 1)
                             } else {
                                 chuckProgressMap[index] = ChunkProgress(index, start, end, 0)
+                            }
+                            // 如果分块已经下载完成, 则跳过
+                            if (chuckProgressMap[index]?.isFinished == true) {
+                                return@async
                             }
                             downloadChunk(
                                 storage = fileStorage,
                                 url = url,
                                 index = index,
-                                start = last?.downloaded ?: start, // 从上次下载的结束位置继续下载
-                                end = last?.end ?: end,
+                                downloadStartOffset = last?.downloaded ?: start, // 从上次下载的结束位置继续下载
+                                downloadEndOffset = end,
                                 onProgress = { delta ->
-                                    val newTotal = totalProgress.addAndGet(delta.toLong())
-                                    chunkProgress.set(index, chunkProgress.get(index) + delta)
-                                    // 节流: 每 200ms emit 一次, 避免高频 emit 拖慢下载
-                                    val now = System.nanoTime()
-                                    if (now - lastEmitTime >= 200_000_000L) {
-                                        lastEmitTime = now
-                                        // channelFlow 的 send 是 suspend, 但 onProgress 是同步回调
-                                        // 用 trySend 避免阻塞下载线程
-                                        val elapsed = (now - lastTime) / 1e9
-                                        val instant = if (elapsed > 0) (newTotal - lastBytes) / elapsed else 0.0
-                                        val totalSec = (now - startTime) / 1e9
-                                        val avg = if (totalSec > 0) newTotal / totalSec else 0.0
-                                        lastBytes = newTotal
-                                        lastTime = now
-                                        val nowChuckProgress = chuckProgressMap[index]!!.copy(
-                                            downloaded = start + chunkProgress.get(index),
-                                        )
-                                        chuckProgressMap[index] = nowChuckProgress
-                                        val chunks = chuckProgressMap.values.sortedBy { it.index }
-                                        emitDownloadProgress(
-                                            DownloadProgressRecord(
-                                                length = meta.length,
-                                                progress = newTotal,
-                                                snapSpeed = instant,
-                                                averageSpeed = avg,
-                                                chunks = chunks,
-                                            )
-                                        )
-                                    }
+                                    // 累积每个分块的下载总量/读取的字节数
+                                    chunkDownloadedLengths.set(index, chunkDownloadedLengths.get(index) + delta)
+                                    // 累加总下载量/读取的字节数
+                                    totalDownloadedLength.addAndGet(delta.toLong())
                                     if (isPaused) {
                                         trySend(DownloadStatus.PAUSED)
+                                    } else {
+                                        updateProgressSignal.trySend(index)
                                     }
                                 },
                             )
                         }
                     }
+                    val updateProgressJob = launch {
+                        while (!isShutdown) {
+                            val index = updateProgressSignal.receive()
+                            updateProgress(index)
+                            if (isPaused) {
+                                trySend(DownloadStatus.PAUSED)
+                            }
+                        }
+                    }
                     jobs.awaitAll()
+                    updateProgressJob.cancel(CancellationException("下载完成，取消更新进度"))
+                    isTerminated = true
                     Unit
                 }
 
                 // 4) 完成
                 fileStorage.flush()
                 if (isShutdown) {
+                    logger.info("取消下载")
                     send(DownloadStatus.CANCELED)
                 } else {
+                    logger.info("下载完成")
                     send(DownloadStatus.FINISHED)
                 }
             } catch (e: CancellationException) {
@@ -198,26 +227,26 @@ open class MultiChunkDownloadExecutor(
     /**
      * 下载单个分块。
      *
-     * @param start 绝对起始偏移 (含)
-     * @param end   绝对结束偏移 (含)
-     * @param onProgress 增量回调, 参数是本块新增字节数
+     * @param downloadStartOffset 绝对起始偏移 (含)
+     * @param downloadEndOffset   绝对结束偏移 (含)
+     * @param onProgress 增量回调, 参数是每次从响应体读取字节数, 或者说进度增量
      */
     protected open suspend fun downloadChunk(
         storage: RandomAccessFileStorage,
         url: String,
         index: Int,
-        start: Long,
-        end: Long,
+        downloadStartOffset: Long,
+        downloadEndOffset: Long,
         onProgress: (Int) -> Unit,
     ) {
         val con = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
-            setRequestProperty("Range", "bytes=$start-$end")
+            setRequestProperty("Range", "bytes=$downloadStartOffset-$downloadEndOffset")
             setRequestProperty("Accept-Encoding", "identity")
             readTimeout = HttpConstant.HTTP_TIME_OUT
             connectTimeout = HttpConstant.HTTP_TIME_OUT
         }
-        logger.debug("下载分块 #$index: (Range: $start-$end)")
+        logger.debug("下载分块 #$index: (Range: $downloadStartOffset-$downloadEndOffset)")
         try {
             val code = con.responseCode
             if (code != HttpURLConnection.HTTP_PARTIAL && code != HttpURLConnection.HTTP_OK) {
@@ -227,14 +256,14 @@ open class MultiChunkDownloadExecutor(
             // 这种情况下我们只读前 (end-start+1) 字节并写入 start 偏移是错误的 (文件布局会乱),
             // 但为了容错, 这里只接受 206。若探测阶段 acceptRanges=true 而这里返回 200,
             // 说明服务端行为不一致, 直接报错让上层处理。
-            if (code == HttpURLConnection.HTTP_OK && (start != 0L || end != con.contentLength - 1L)) {
+            if (code == HttpURLConnection.HTTP_OK && (downloadStartOffset != 0L || downloadEndOffset != con.contentLength - 1L)) {
                 throw IOException("服务端不支持 Range, 分块 #$index 收到 200")
             }
 
             val buffer = ByteArray(HttpConstant.COPY_BUFFER_SIZE)
             var read: Int
             con.inputStream.source().buffer().use { source ->
-                var pos = start
+                var pos = downloadStartOffset
                 while (source.read(buffer, 0, HttpConstant.COPY_BUFFER_SIZE).also { read = it } != -1) {
                     currentCoroutineContext().ensureActive()
                     storage.writeAt(pos, buffer, 0, read)
@@ -244,8 +273,8 @@ open class MultiChunkDownloadExecutor(
                     if (isShutdown) break
                 }
                 // 校验: 本块是否下完
-                if (!isShutdown && pos != end + 1) {
-                    throw IOException("分块 #$index 提前结束: 期望到 ${end + 1}, 实际到 $pos")
+                if (!isShutdown && pos != downloadEndOffset + 1) {
+                    throw IOException("分块 #$index 提前结束: 期望到 ${downloadEndOffset + 1}, 实际到 $pos")
                 }
             }
         } finally {

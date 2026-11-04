@@ -96,14 +96,15 @@ open class DefaultDownloadNotifierImpl : INotifier {
             }
 
             is DownloadStatus.DOWNLOADING -> {
+                val progressRecord = state.progress
                 builder.setContentText(
                     context.resources.getString(
                         R.string.download_notify_running,
                         params.fileEntity.name,
-                        "${state.averageSpeed.toDataUnit}/s",
+                        "${progressRecord.averageSpeed.toDataUnit}/s",
                     )
                 )
-                builder.setProgress(state.length.toInt(), state.progress.toInt(), true)
+                builder.setProgress(progressRecord.length.toInt(), progressRecord.progress.toInt(), true)
             }
 
             DownloadStatus.PAUSED -> {
@@ -168,14 +169,15 @@ open class ApkUpdateNotifierImpl : DefaultDownloadNotifierImpl() {
             }
 
             is DownloadStatus.DOWNLOADING -> {
+                val progressRecord = state.progress
                 builder.setContentText(
                     context.resources.getString(
                         R.string.download_notify_running,
                         params.fileEntity.name,
-                        "${state.averageSpeed.toDataUnit}/s",
+                        "${progressRecord.averageSpeed.toDataUnit}/s",
                     )
                 )
-                builder.setProgress(state.length.toInt(), state.progress.toInt(), true)
+                builder.setProgress(progressRecord.length.toInt(), progressRecord.progress.toInt(), true)
                 builder.build()
             }
 
