@@ -19,7 +19,6 @@ import com.github.knightwood.downloader.ui.room.model.DownloadStatusType
 import com.github.knightwood.downloader.ui.room.model.isRunning
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * 职责：
  * 1. 把新任务写入数据库，并提交给 `DownloadService` 执行
- * 2. 订阅任务的 [DownloadTask.stateFlow] 与 [DownloadTask.currentDownloadingProgress]，
+ * 2. 订阅任务的 [DownloadTask.stateFlow] 与 [DownloadTask.progressFlow]，
  *    把实时状态/进度发布到内存中的 [runtimeStates]，界面直接读取展示
  * 3. 状态变化即时写入数据库；下载中的进度与分块进度按秒级节流写入，供断点续传使用
  * 4. 提供服务重连后的状态对齐：数据库里记录为“下载中”但服务中已不存在的任务
@@ -214,25 +213,25 @@ class DownloadTaskRepository(
      * `DownloadTask.pause()` 会挂起直到任务进入暂停状态，此处不阻塞界面，
      * 状态变化由状态流推送到 [runtimeStates] 并落库。
      */
-    fun pause(taskId: Int) {
+    suspend fun pause(taskId: Int) {
         val task = linker?.findTask(taskId) ?: return
-        scope.launch { runCatching { task.pause() } }
+        task.pause()
     }
 
     /**
      * 继续下载
      */
-    fun resume(taskId: Int) {
+    suspend fun resume(taskId: Int) {
         val task = linker?.findTask(taskId)
         if (task != null) {
             if (task.isPaused) {
-                scope.launch { runCatching { task.resume() } }
+                task.resume()
             } else {
-                scope.launch { retry(taskId) }
+                retry(taskId)
             }
         } else {
             // 点击暂停后关闭app，再次打开app后点击继续下载，任务实例根本不存在，需要重新提交任务
-            scope.launch { retry(taskId) }
+            retry(taskId)
         }
     }
 
@@ -296,7 +295,7 @@ class DownloadTaskRepository(
             try {
                 Log.d(TAG, "Observing task: ${task.id}")
                 //使用 sharedFlow，避免在重启任务时观察到任务状态是终止态导致flow不再收集
-                combine(task.eventFlow, task.currentDownloadingProgress) { status, progress ->
+                combine(task.eventFlow, task.progressFlow) { status, progress ->
                     TaskRuntimeState(status, progress)
                 }
                     // eventFlow 是不会结束的热流, 到达终态后主动结束采集, 避免协程常驻
@@ -344,7 +343,7 @@ class DownloadTaskRepository(
             taskId = taskId,
             status = currentStatusTypt,
             totalSize = snapshotProgress.length,
-            downloadedSize = snapshotProgress.progress,
+            downloadedSize = snapshotProgress.downloaded,
 //            snapSpeed = status.snapSpeed,
 //            averageSpeed = status.averageSpeed,
             updateTime = updateTime,
@@ -445,7 +444,7 @@ class DownloadTaskRepository(
      * 获取任务当前的运行时状态
      */
     private fun DownloadTask.getStateSnapshot(): TaskRuntimeState =
-        TaskRuntimeState(stateFlow.value, currentDownloadingProgress.value)
+        TaskRuntimeState(stateFlow.value, progressFlow.value)
 
     /**
      * 更新界面状态

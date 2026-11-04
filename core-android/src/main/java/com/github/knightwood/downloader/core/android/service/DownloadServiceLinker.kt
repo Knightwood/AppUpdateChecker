@@ -36,7 +36,7 @@ abstract class DownloadServiceLinker : Binder() {
 
     abstract fun findTask(id: Int): DownloadTask?
 
-    abstract fun cancelTask(id: Int)
+    abstract suspend fun cancelTask(id: Int)
 
     abstract fun stopService()
 

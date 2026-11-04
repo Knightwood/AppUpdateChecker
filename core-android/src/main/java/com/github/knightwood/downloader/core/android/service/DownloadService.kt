@@ -91,11 +91,9 @@ class DownloadService : Service() {
             return taskMgr.findTaskById(id)
         }
 
-        override fun cancelTask(id: Int) {
-            scope.launch {
-                // 排队中的任务需要从等待队列移除, 只调用 task.cancel() 的话任务仍会开始下载
-                taskMgr.cancel(id)
-            }
+        override suspend fun cancelTask(id: Int) {
+            // 排队中的任务需要从等待队列移除, 只调用 task.cancel() 的话任务仍会开始下载
+            taskMgr.cancel(id)
         }
 
         override fun stopService() {

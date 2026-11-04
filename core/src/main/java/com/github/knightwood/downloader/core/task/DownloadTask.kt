@@ -5,9 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -45,8 +43,8 @@ open class DownloadTask(
     private val _stateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow(DownloadStatus.IDLE)
     val stateFlow: StateFlow<DownloadStatus> get() = _stateFlow
     //最新的下载进度
-    private var _currentDownloadingProgress: MutableStateFlow<DownloadProgressRecord?> = MutableStateFlow(null)
-    val currentDownloadingProgress: StateFlow<DownloadProgressRecord?> get() = _currentDownloadingProgress
+    private var _progressFlow: MutableStateFlow<DownloadProgressRecord?> = MutableStateFlow(null)
+    val progressFlow: StateFlow<DownloadProgressRecord?> get() = _progressFlow
 
     constructor(
         saveState: DownloadTaskSaveState,
@@ -78,7 +76,7 @@ open class DownloadTask(
         if (isCancelled||isFailed) { //这是下载失败又重新下载的，需重置某些状态
             _stateFlow.value = DownloadStatus.IDLE
             //恢复之前取消任务时的下载进度
-            if (_currentDownloadingProgress.value != null) {
+            if (_progressFlow.value != null) {
                 restoreProgress()
             }
         }
@@ -91,7 +89,7 @@ open class DownloadTask(
 
             if (state is DownloadStatus.DOWNLOADING) {
                 logger.debug("downloading progress {}", state)
-                _currentDownloadingProgress.value = state.progress
+                _progressFlow.value = state.progress
             } else if (state is DownloadStatus.ERROR){
                 logger.error("download failed", state.e)
             }
@@ -152,7 +150,7 @@ open class DownloadTask(
         }
         return DownloadTaskSaveState(
             id = id, conf = conf,
-            progress = _currentDownloadingProgress.value,
+            progress = _progressFlow.value,
             finalState = _stateFlow.value
         )
     }
@@ -176,7 +174,7 @@ open class DownloadTask(
      * task.execute()
      * ```
      */
-    fun restoreProgress(progress: DownloadProgressRecord? = _currentDownloadingProgress.value): Boolean {
+    fun restoreProgress(progress: DownloadProgressRecord? = _progressFlow.value): Boolean {
         if (progress == null) {
             return false
         }

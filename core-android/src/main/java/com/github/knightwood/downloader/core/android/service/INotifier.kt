@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.github.knightwood.downloader.core.android.Downloader
 
@@ -15,6 +16,7 @@ import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
 import com.github.knightwood.downloader.core.android.util.ApkUtil
 import com.github.knightwood.downloader.core.android.util.Constant
 import com.github.knightwood.downloader.core.util.toDataUnit
+import kotlin.math.roundToInt
 
 interface INotifier {
     val NOTIFY_ID: Int
@@ -43,6 +45,7 @@ open class DefaultDownloadNotifierImpl : INotifier {
     override val CHANNEL_NAME: String = Constant.DEFAULT_CHANNEL_NAME
     override val CHANNEL_DESC: String = Constant.DEFAULT_CHANNEL_DESC
     override val NOTIFY_ID: Int = Constant.DEFAULT_NOTIFY_ID
+    val TAG: String = "DownloadNotifier"
 
     override fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -104,7 +107,8 @@ open class DefaultDownloadNotifierImpl : INotifier {
                         "${progressRecord.averageSpeed.toDataUnit}/s",
                     )
                 )
-                builder.setProgress(progressRecord.length.toInt(), progressRecord.progress.toInt(), true)
+                Log.d(TAG,"已下载:${state.progress.downloaded}; 总长度:${state.progress.length}; 进度:${progressRecord.percentage.roundToInt()}/100")
+                builder.setProgress(100, progressRecord.percentage.roundToInt(), false)
             }
 
             DownloadStatus.PAUSED -> {
@@ -177,7 +181,7 @@ open class ApkUpdateNotifierImpl : DefaultDownloadNotifierImpl() {
                         "${progressRecord.averageSpeed.toDataUnit}/s",
                     )
                 )
-                builder.setProgress(progressRecord.length.toInt(), progressRecord.progress.toInt(), true)
+                builder.setProgress(progressRecord.length.toInt(), progressRecord.downloaded.toInt(), true)
                 builder.build()
             }
 

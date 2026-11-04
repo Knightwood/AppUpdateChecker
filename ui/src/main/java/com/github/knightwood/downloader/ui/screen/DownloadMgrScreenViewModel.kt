@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.compose.runtime.Stable
 import androidx.core.content.ContextCompat
@@ -16,6 +17,7 @@ import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
 import com.github.knightwood.downloader.core.android.model.FileEntity
 import com.github.knightwood.downloader.core.android.model.TaskParams
 import com.github.knightwood.downloader.core.android.service.DownloadServiceLinker
+import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.util.HttpConnectionUtils
 import com.github.knightwood.downloader.core.util.HttpConstant
@@ -28,6 +30,7 @@ import com.github.knightwood.downloader.ui.repository.DownloadTaskRepository
 import com.github.knightwood.downloader.ui.repository.TaskRuntimeState
 import com.github.knightwood.downloader.ui.storage.DownloadTarget
 import com.github.knightwood.downloader.ui.storage.DownloadTargetResolver
+import com.github.knightwood.downloader.ui.util.OperateLocker
 import com.github.knightwood.downloader.ui.util.calculateProgress
 import com.github.knightwood.downloader.ui.util.sanitizeFileName
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +46,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 
 /**
@@ -65,6 +69,7 @@ import kotlinx.coroutines.withContext
 @Stable
 class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val TAG = javaClass.simpleName
     private val dao = DownloadTaskDatabase.getInstance(application).downloadTaskDao()
     private val repository = DownloadTaskRepository(dao, viewModelScope)
 
@@ -117,38 +122,38 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
 
     //<editor-fold desc="任务操作">
 
-    fun pause(taskId: Int) = repository.pause(taskId)
-
-    fun resume(taskId: Int) = repository.resume(taskId)
-
-    fun cancel(taskId: Int) {
-        viewModelScope.launch {
-            runCatching { repository.cancel(taskId) }
-                .onFailure { _messages.trySend("停止任务失败: ${it.message}") }
-        }
+    val locker by lazy { OperateLocker(viewModelScope) }
+    fun pause(taskId: Int) = locker.launchTaskOp() {
+        runCatching { repository.pause(taskId) }
+            .onFailure { _messages.trySend("暂停任务失败: ${it.message}") }
     }
 
-    fun delete(taskId: Int) {
-        viewModelScope.launch {
-            runCatching { repository.delete(taskId) }
-                .onFailure { _messages.trySend("删除任务失败: ${it.message}") }
-        }
+    fun resume(taskId: Int) = locker.launchTaskOp() {
+        runCatching { repository.resume(taskId) }
+            .onFailure { _messages.trySend("恢复任务失败: ${it.message}") }
     }
 
-    fun retry(taskId: Int) {
-        viewModelScope.launch {
-            repository.retry(taskId)
-                .onSuccess { _messages.trySend("已重新加入下载队列") }
-                .onFailure { _messages.trySend(it.message ?: "重新下载失败") }
-        }
+    fun cancel(taskId: Int) = locker.launchTaskOp() {
+        runCatching { repository.cancel(taskId) }
+            .onFailure { _messages.trySend("停止任务失败: ${it.message}") }
     }
 
-    fun clearFinished() {
-        viewModelScope.launch {
-            runCatching { repository.clearFinished() }
-                .onSuccess { _messages.trySend("已清空已完成的任务记录") }
-                .onFailure { _messages.trySend("清空失败: ${it.message}") }
-        }
+    fun delete(taskId: Int) = locker.launchTaskOp() {
+        runCatching { repository.delete(taskId) }
+            .onFailure { _messages.trySend("删除任务失败: ${it.message}") }
+    }
+
+    fun retry(taskId: Int) = locker.launchTaskOp() {
+        repository.retry(taskId)
+            .onSuccess { _messages.trySend("已重新加入下载队列") }
+            .onFailure { _messages.trySend(it.message ?: "重新下载失败") }
+    }
+
+    fun clearFinished() = locker.launchTaskOp() {
+        runCatching { repository.clearFinished() }
+            .onSuccess { _messages.trySend("已清空已完成的任务记录") }
+            .onFailure { _messages.trySend("清空失败: ${it.message}") }
+
     }
 
     //</editor-fold>
@@ -351,24 +356,32 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
      * 没有运行时状态（进程重启后的历史记录）时回退到数据库中的秒级快照。
      */
     private fun DownloadTaskEntity.toUiItem(runtime: TaskRuntimeState?): DownloadTaskItem {
-        return if (runtime != null) toUiItemWithRuntime(runtime) else toUiItemWithRecord()
+        return if (runtime != null && runtime.progress != null) {
+            toUiItemWithRuntime(runtime.status, runtime.progress)
+        } else {
+            toUiItemWithRecord()
+        }
     }
 
     /**
+     * 将任务运行中的实时状态转换成列表项状态
+     *
      * @receiver 数据库记录
-     * @param runtime 任务运行中的实时状态
+     * @param status 任务状态
+     * @param progressRecord 任务进度
      */
-    private fun DownloadTaskEntity.toUiItemWithRuntime(runtime: TaskRuntimeState): DownloadTaskItem {
-        val downloadStatusType = DownloadStatusType.of(runtime.status)
-        //实时下载进度
-        val downloadProgressRecord = runtime.progress
-        val total = downloadProgressRecord?.length ?: size ?: totalSize
+    private fun DownloadTaskEntity.toUiItemWithRuntime(
+        status: DownloadStatus,
+        progressRecord: DownloadProgressRecord,
+    ): DownloadTaskItem {
+        val downloadStatusType = DownloadStatusType.of(status)
+        val total = progressRecord.length
         val downloaded = when {
-            downloadProgressRecord != null -> downloadProgressRecord.progress
             // 已完成的任务没有运行时进度，按文件长度展示
             downloadStatusType == DownloadStatusType.FINISHED -> total
-            else -> this.downloadedSize
+            else -> progressRecord.downloaded
         }
+        Log.d(TAG, "toUiItemWithRuntime: $taskId $name $downloadStatusType $total $downloaded")
         return DownloadTaskItem(
             taskId = taskId,
             name = name,
@@ -376,14 +389,10 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
             state = downloadStatusType,
             totalSize = total,
             downloadedSize = downloaded,
-            speed = if (downloadStatusType == DownloadStatusType.DOWNLOADING) {
-                downloadProgressRecord?.snapSpeed ?: Double.NaN
-            } else {
-                Double.NaN
-            },
+            speed = if (downloadStatusType == DownloadStatusType.DOWNLOADING) progressRecord.snapSpeed else Double.NaN,
             chunkCount = this@toUiItemWithRuntime.chunkCount,
             chunked = isSupportChunkDownload,
-            errorMessage = (runtime?.status as? DownloadStatus.ERROR)?.e?.message ?: errorMessage,
+            errorMessage = (status as? DownloadStatus.ERROR)?.e?.message ?: errorMessage,
             targetText = pathText(),
         )
     }

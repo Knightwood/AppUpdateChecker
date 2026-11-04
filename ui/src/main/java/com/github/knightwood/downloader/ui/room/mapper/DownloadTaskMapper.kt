@@ -128,7 +128,7 @@ fun DownloadTaskEntity.toDownloadProgressRecord(
     chunks: List<DownloadChunkEntity> = emptyList(),
 ): DownloadProgressRecord = DownloadProgressRecord(
     length = totalSize,
-    progress = downloadedSize,
+    downloaded = downloadedSize,
     snapSpeed = Double.NaN,
     averageSpeed = Double.NaN,
     chunks = chunks.map { it.toChunkProgress() },
@@ -251,7 +251,7 @@ fun DownloadTaskSaveState.toTaskEntity(
         status = DownloadStatusType.of(finalState),
         errorMessage = (finalState as? DownloadStatus.ERROR)?.e?.message,
         totalSize = downloading?.length ?: 0,
-        downloadedSize = downloading?.progress ?: 0,
+        downloadedSize = downloading?.downloaded ?: 0,
 //        snapSpeed = downloading?.snapSpeed ?: Double.NaN,
 //        averageSpeed = downloading?.averageSpeed ?: Double.NaN,
         queueOrder = queueOrder,
