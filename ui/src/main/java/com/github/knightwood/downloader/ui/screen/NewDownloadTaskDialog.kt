@@ -5,33 +5,19 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
+import com.github.knightwood.downloader.core.util.DownloadFormat
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.ui.storage.DownloadTarget
-import com.github.knightwood.downloader.ui.util.formatByteSize
 import kotlin.math.roundToInt
 
 /**
@@ -54,21 +40,36 @@ fun NewDownloadTaskDialog(
     onChunkCountChange: (Int) -> Unit,
     onSubmit: () -> Unit,
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        NewDownloadTaskContent(
-            state = state,
-            onDismiss = onDismiss,
-            onUrlChange = onUrlChange,
-            onFileNameChange = onFileNameChange,
-            onProbe = onProbe,
-            onTargetChange = onTargetChange,
-            onPickDirectory = onPickDirectory,
-            onRequestStoragePermission = onRequestStoragePermission,
-            onChunkEnabledChange = onChunkEnabledChange,
-            onChunkCountChange = onChunkCountChange,
-            onSubmit = onSubmit,
-        )
-    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            Button(onClick = onSubmit, enabled = state.canSubmit) {
+                Text(if (state.submitting) "提交中..." else "开始下载")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+        title = {
+            Text(text = "新建下载任务")
+        },
+        text = {
+            NewDownloadTaskContent(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                state = state,
+                onUrlChange = onUrlChange,
+                onFileNameChange = onFileNameChange,
+                onProbe = onProbe,
+                onTargetChange = onTargetChange,
+                onPickDirectory = onPickDirectory,
+                onRequestStoragePermission = onRequestStoragePermission,
+                onChunkEnabledChange = onChunkEnabledChange,
+                onChunkCountChange = onChunkCountChange,
+            )
+        }
+    )
 }
 
 /**
@@ -76,8 +77,8 @@ fun NewDownloadTaskDialog(
  */
 @Composable
 internal fun NewDownloadTaskContent(
+    modifier: Modifier = Modifier,
     state: NewTaskUiState,
-    onDismiss: () -> Unit,
     onUrlChange: (String) -> Unit,
     onFileNameChange: (String) -> Unit,
     onProbe: () -> Unit,
@@ -86,136 +87,113 @@ internal fun NewDownloadTaskContent(
     onRequestStoragePermission: () -> Unit,
     onChunkEnabledChange: (Boolean) -> Unit,
     onChunkCountChange: (Int) -> Unit,
-    onSubmit: () -> Unit,
 ) {
     val context = LocalContext.current
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 560.dp),
-        shape = MaterialTheme.shapes.extraLarge,
-        tonalElevation = 6.dp,
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        OutlinedTextField(
+            value = state.url,
+            onValueChange = onUrlChange,
+            label = { Text("下载地址") },
+            placeholder = { Text("https://example.com/app.apk") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(text = "新建下载任务", style = MaterialTheme.typography.titleLarge)
-
-            OutlinedTextField(
-                value = state.url,
-                onValueChange = onUrlChange,
-                label = { Text("下载地址") },
-                placeholder = { Text("https://example.com/app.apk") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            TextButton(
+                onClick = onProbe,
+                enabled = state.url.isNotBlank() && state.probe !is ProbeState.Loading,
             ) {
-                TextButton(
-                    onClick = onProbe,
-                    enabled = state.url.isNotBlank() && state.probe !is ProbeState.Loading,
-                ) {
-                    Text(if (state.probe is ProbeState.Loading) "探测中..." else "探测文件信息")
-                }
-                ProbeSummary(state)
+                Text(if (state.probe is ProbeState.Loading) "探测中..." else "探测文件信息")
             }
+            ProbeSummary(state)
+        }
 
-            OutlinedTextField(
-                value = state.fileName,
-                onValueChange = onFileNameChange,
-                label = { Text("文件名") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+        OutlinedTextField(
+            value = state.fileName,
+            onValueChange = onFileNameChange,
+            label = { Text("文件名") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
 
-            Text(text = "保存位置", style = MaterialTheme.typography.titleSmall)
+        Text(text = "保存位置", style = MaterialTheme.typography.titleSmall)
 
-            TargetOption(
-                title = "应用缓存目录",
-                description = "externalCacheDir/Download，无需权限，卸载应用后文件被清除",
-                selected = state.target == DownloadTarget.AppCache,
-                onClick = { onTargetChange(DownloadTarget.AppCache) },
-            )
-            TargetOption(
-                title = "系统下载目录",
-                description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    "文件管理器的 Download 文件夹，Android 10 及以上无需权限"
-                } else {
-                    "文件管理器的 Download 文件夹，需要存储权限"
-                },
-                selected = state.target == DownloadTarget.PublicDownloads,
-                onClick = { onTargetChange(DownloadTarget.PublicDownloads) },
-            )
-            TargetOption(
-                title = "自定义文件夹",
-                description = when (val target = state.target) {
-                    is DownloadTarget.SafDirectory -> "已选择: ${target.treeUri.lastPathSegment ?: target.treeUri}"
-                    else -> "通过系统文件选择器指定任意目录"
-                },
-                selected = state.target is DownloadTarget.SafDirectory,
-                onClick = onPickDirectory,
-            )
+        TargetOption(
+            title = "应用缓存目录",
+            description = "externalCacheDir/Download，无需权限，卸载应用后文件被清除",
+            selected = state.target == DownloadTarget.AppCache,
+            onClick = { onTargetChange(DownloadTarget.AppCache) },
+        )
+        TargetOption(
+            title = "系统下载目录",
+            description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                "文件管理器的 Download 文件夹，Android 10 及以上无需权限"
+            } else {
+                "文件管理器的 Download 文件夹，需要存储权限"
+            },
+            selected = state.target == DownloadTarget.PublicDownloads,
+            onClick = { onTargetChange(DownloadTarget.PublicDownloads) },
+        )
+        TargetOption(
+            title = "自定义文件夹",
+            description = when (val target = state.target) {
+                is DownloadTarget.SafDirectory -> "已选择: ${target.treeUri.lastPathSegment ?: target.treeUri}"
+                else -> "通过系统文件选择器指定任意目录"
+            },
+            selected = state.target is DownloadTarget.SafDirectory,
+            onClick = onPickDirectory,
+        )
 
-            if (needStoragePermission(context, state.target)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Android 10 以下写入下载目录需要存储权限",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = onRequestStoragePermission) { Text("授权") }
-                }
-            }
-
+        if (needStoragePermission(context, state.target)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "分块（多线程）下载", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = chunkHint(state),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = state.useChunk,
-                    onCheckedChange = onChunkEnabledChange,
-                    enabled = state.chunkAvailable,
-                )
-            }
-
-            if (state.chunkAvailable) {
-                ChunkCountSlider(
-                    count = state.chunkCount,
-                    maxCount = state.maxChunkCount,
-                    enabled = state.chunkEnabled,
-                    onCountChange = onChunkCountChange,
-                )
-            }
-
-            state.error?.let { message ->
                 Text(
-                    text = message,
+                    text = "Android 10 以下写入下载目录需要存储权限",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onRequestStoragePermission) { Text("授权") }
+            }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "分块（多线程）下载", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = chunkHint(state),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Switch(
+                checked = state.useChunk,
+                onCheckedChange = onChunkEnabledChange,
+                enabled = state.chunkAvailable,
+            )
+        }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                TextButton(onClick = onDismiss) { Text("取消") }
-                Button(onClick = onSubmit, enabled = state.canSubmit) {
-                    Text(if (state.submitting) "提交中..." else "开始下载")
-                }
-            }
+        if (state.chunkAvailable) {
+            ChunkCountSlider(
+                count = state.chunkCount,
+                maxCount = state.maxChunkCount,
+                enabled = state.chunkEnabled,
+                onCountChange = onChunkCountChange,
+            )
+        }
+
+        state.error?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
     }
 }
@@ -292,7 +270,7 @@ private fun ProbeSummary(state: NewTaskUiState) {
 
         is ProbeState.Success -> Text(
             text = buildString {
-                append(formatByteSize(probe.meta.length))
+                append(DownloadFormat.formatByteSize(probe.meta.length))
                 append(" · ")
                 append(if (probe.meta.acceptRanges) "支持多线程" else "仅单线程")
             },

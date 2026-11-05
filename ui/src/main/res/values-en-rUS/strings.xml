@@ -1,0 +1,10 @@
+<resources>
+
+    <string name="app_update_notify_permission_rationale_title">Notification permission</string>
+    <string name="app_update_notify_permission_rationale_message">Allow notifications to follow the download progress of the new version in the notification shade and to be reminded to install it when the download finishes.</string>
+    <string name="app_update_notify_permission_rationale_positive">Allow</string>
+    <string name="app_update_notify_permission_rationale_negative">Not now</string>
+    <string name="app_update_notify_permission_settings_title">Notifications are disabled</string>
+    <string name="app_update_notify_permission_settings_message">Notifications for this app are disabled. Please allow this app to send notifications in the system settings.</string>
+    <string name="app_update_notify_permission_settings_positive">Open settings</string>
+</resources>

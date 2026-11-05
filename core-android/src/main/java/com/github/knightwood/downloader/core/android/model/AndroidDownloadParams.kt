@@ -2,7 +2,6 @@ package com.github.knightwood.downloader.core.android.model
 
 import com.github.knightwood.downloader.core.android.IDownloadedHandler
 import com.github.knightwood.downloader.core.executor.IDownloadExecutor
-import com.github.knightwood.downloader.core.util.toDataUnit
 import com.github.knightwood.downloader.core.android.util.Constant
 import com.github.knightwood.downloader.core.android.Downloader
 import com.github.knightwood.downloader.core.android.Downloader.authorities
@@ -10,9 +9,9 @@ import com.github.knightwood.downloader.core.android.service.ApkUpdateNotifierIm
 import com.github.knightwood.downloader.core.android.service.INotifier
 import com.github.knightwood.downloader.core.android.util.ApkUtil
 import com.github.knightwood.downloader.core.model.DownloadProgressRecord
-import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.task.DownloadTask
+import com.github.knightwood.downloader.core.util.DownloadFormat
 
 class AndroidDownloadParams() {
 
@@ -48,7 +47,7 @@ class FileEntity(
     var sizeText: String? = null
         get() {
             if (size != null) {
-                return size.toDataUnit
+                return DownloadFormat.formatByteSize(size)
             } else {
                 return field
             }

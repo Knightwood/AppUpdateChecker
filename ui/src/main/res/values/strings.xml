@@ -18,4 +18,14 @@
     <string name="update">更新</string>
     <string name="canceled">已取消</string>
     <string name="app_downloading">下载中</string>
+
+
+    <string name="app_update_notify_permission_rationale_title">通知权限</string>
+    <string name="app_update_notify_permission_rationale_message">开启通知权限后，才能在下拉通知栏中查看新版本的下载进度。</string>
+    <string name="app_update_notify_permission_rationale_positive">去开启</string>
+    <string name="app_update_notify_permission_rationale_negative">暂不开启</string>
+    <string name="app_update_notify_permission_settings_title">通知已被关闭</string>
+    <string name="app_update_notify_permission_settings_message">系统通知当前处于关闭状态，请前往系统设置中允许本应用发送通知。</string>
+    <string name="app_update_notify_permission_settings_positive">去设置</string>
+
 </resources>

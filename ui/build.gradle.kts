@@ -50,6 +50,7 @@ dependencies {
     implementation(libs.androidx.appCompat)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.ktx)
+    implementation(libs.google.material)
 
     implementation(libs.kotlin.coroutines.core)
     implementation(libs.kotlin.coroutines.android)
@@ -58,9 +59,9 @@ dependencies {
     val bom = libs.versions.bom.get()
     // Import the Compose BOM
     implementation(platform("androidx.compose:compose-bom:${bom}"))
-    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3:1.5.0-alpha15")
     implementation("androidx.activity:activity-compose:1.13.0")
-    implementation("androidx.compose.material:material-icons-extended:1.7.8")
+//    implementation("androidx.compose.material:material-icons-extended:1.7.8")
 
     // Navigation3
 //    implementation("androidx.navigation3:navigation3-runtime:1.3.0-alpha02")

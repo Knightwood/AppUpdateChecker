@@ -1,5 +1,6 @@
 package com.github.knightwood.downloader.ui.di
 
+import android.app.Application
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.Koin
 import org.koin.core.KoinApplication
@@ -113,6 +114,12 @@ inline fun <reified T : Any> DownloaderKoinComponent.inject(
 ): Lazy<T> =
     lazy(mode) { get<T>(qualifier, parameters) }
 
+fun startDownloaderKoin(application: Application){
+    startDownloaderKoin {
+        androidContext(application)
+        modules(InstanceModule.module)
+    }
+}
 fun startDownloaderKoin(appDeclaration: KoinAppDeclaration){
     DownloaderKoinContext.startKoin(appDeclaration)
 }

@@ -115,7 +115,7 @@ class DownloadTaskRepository(
                 observeTask(task)
             } else {
                 if (entity.status.isRunning) {
-                    // 进程被回收，运行状态已丢失
+                    // 进程被回收，运行状态已丢失, 重置为暂停状态
                     dao.updateStatus(entity.taskId, DownloadStatusType.PAUSED, null, now)
                 }
                 //其余状态没有处理
@@ -263,7 +263,7 @@ class DownloadTaskRepository(
         val linker = linker
         val task = linker?.findTask(taskId)
         if (linker != null && task != null) {
-            runCatching { linker.cancelTask(taskId) }
+            linker.cancelTask(taskId)
         }
         collectors.remove(taskId)?.cancel()
         removeTaskSnapshotState(taskId)

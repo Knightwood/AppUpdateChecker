@@ -107,6 +107,14 @@ abstract class DownloadTaskDao {
     suspend fun getAllIn(vararg status: DownloadStatusType): List<DownloadTaskEntity> =
         getAllByStatusNames(status.map { it.name })
 
+    /**
+     * 获取全部任务记录的文件名，用于新建任务时判断是否重名并生成不重复的名称
+     * % 和 _ 在 LIKE 中是通配符。如果用户输入的内容本身包含这些字符，需要使用 ESCAPE 子句来处理，否则它们会被当作通配符生效。
+     *
+     */
+    @Query("SELECT name FROM download_task_table WHERE name LIKE :name || '%' ESCAPE '\\'")
+    abstract suspend fun getAllNamesLike(name:String): List<String>
+
     //</editor-fold>
 
     //<editor-fold desc="分块进度查询">
