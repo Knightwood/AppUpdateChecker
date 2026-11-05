@@ -11,25 +11,38 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 
-class DownloadPreferenceProvider(val application: Application) {
+class DownloadPreferenceProvider(val application: Application) : IPreferenceProvider<IDownloadPreference> {
     val Application.dataStore by preferencesDataStore(name = "download_preferences")
-    val flow = application.dataStore.data.map { value -> value.toDownloadPreference() }
-    val value: DownloadPreference = runBlocking { flow.first() }
+    override val flow = application.dataStore.data.map { value -> toEntity(value) }
+    override val value: IDownloadPreference = runBlocking { flow.first() }
 
-    suspend fun update(entity: IDownloadPreference) {
+    override suspend fun update(transform: (IDownloadPreference) -> IDownloadPreference) {
+        val old = flow.first()
+        toPreference(transform(old))
+    }
+
+    override suspend fun query(): IDownloadPreference = flow.first()
+
+    override suspend fun clear() {
         application.dataStore.edit { settings ->
-            settings[Keys.KEY_MAX_PARALLEL_DOWNLOAD_COUNT] = entity.maxParallelDownloadCount
-            settings[Keys.KEY_MIN_CHUNK_SIZE] = entity.minChunkSize
-            settings[Keys.KEY_MAX_CHUNK_COUNT] = entity.maxChunkCount
+            settings.clear()
         }
     }
 
-    private fun Preferences.toDownloadPreference(): DownloadPreference {
+    override fun toEntity(domain: Preferences): IDownloadPreference {
         return DownloadPreference(
-            maxParallelDownloadCount = this[Keys.KEY_MAX_PARALLEL_DOWNLOAD_COUNT] ?: 5,
-            minChunkSize = this[Keys.KEY_MIN_CHUNK_SIZE] ?: HttpConstant.MIN_CHUNK_SIZE,
-            maxChunkCount = this[Keys.KEY_MAX_CHUNK_COUNT] ?: HttpConstant.DEFAULT_CHUNK_COUNT
+            maxParallelDownloadCount = domain[Keys.KEY_MAX_PARALLEL_DOWNLOAD_COUNT] ?: 5,
+            chunkSize = domain[Keys.KEY_MIN_CHUNK_SIZE] ?: HttpConstant.MIN_CHUNK_SIZE,
+            maxChunkCount = domain[Keys.KEY_MAX_CHUNK_COUNT] ?: HttpConstant.DEFAULT_CHUNK_COUNT
         )
+    }
+
+    override suspend fun toPreference(entity: IDownloadPreference): Preferences {
+        return application.dataStore.edit { settings ->
+            settings[Keys.KEY_MAX_PARALLEL_DOWNLOAD_COUNT] = entity.maxParallelDownloadCount
+            settings[Keys.KEY_MIN_CHUNK_SIZE] = entity.chunkSize
+            settings[Keys.KEY_MAX_CHUNK_COUNT] = entity.maxChunkCount
+        }
     }
 
     object Keys {

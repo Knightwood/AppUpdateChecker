@@ -50,8 +50,10 @@ sealed interface DownloadTarget {
         /**
          * 是否支持分块（多线程）下载
          * 之前使用uri的FileStorage实现有误，不支持随机写入。现在修好了，方法直接返回true。
+         * 不过SAF框架的uri分块写入会频繁报错 Bad File Descriptor，先禁用分块下载。
          */
         fun supportsParallel(target: DownloadTarget): Boolean {
+            if (target is DownloadTarget.SafDirectory) return false
             return true
         }
     }

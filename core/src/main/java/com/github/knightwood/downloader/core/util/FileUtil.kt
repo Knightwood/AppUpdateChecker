@@ -65,36 +65,18 @@ object FileUtil {
         }
         return false
     }
+
+
+    /**
+     * 移除文件名中不合法或会影响路径解析的字符
+     */
+    fun sanitizeFileName(name: String): String {
+        val cleaned = name
+            .substringAfterLast('/')
+            .substringAfterLast('\\')
+            .replace(Regex("[\\\\/:*?\"<>|\\u0000-\\u001F]"), "_")
+            .trim()
+        return cleaned.ifEmpty { "download" }
+    }
+
 }
-
-
-/**
- * 根据字节数转换成易阅读的单位格式
- */
-val Long?.toDataUnit: String?
-    get() {
-        if (this == null) {
-            return null
-        }
-        if (this < 1024) {
-            return "${this}B"
-        }
-        if (this < 1024 * 1024) {
-            return "${ "%.2f".format( this / 1024)}KB"
-        }
-        return "${ "%.2f".format(this / 1024 / 1024)}MB"
-    }
-
-val Double?.toDataUnit: String?
-    get() {
-        if (this == null) {
-            return null
-        }
-        if (this < 1024) {
-            return "${this}B"
-        }
-        if (this < 1024 * 1024) {
-            return "${ "%.2f".format(this / 1024)}KB"
-        }
-        return "${ "%.2f".format(this / 1024 / 1024)}MB"
-    }

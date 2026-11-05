@@ -3,7 +3,7 @@ kotlin = "2.2.10"
 ksp = "2.2.10-2.0.2"
 coroutines = "1.10.0"
 
-bom="2026.02.00"
+bom="2026.06.01"
 agp = "8.10.0"
 androidTools = "31.4.0"
 android-minSdk = "26"

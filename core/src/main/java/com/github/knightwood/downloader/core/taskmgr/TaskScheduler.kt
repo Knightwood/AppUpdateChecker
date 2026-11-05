@@ -17,6 +17,10 @@ import java.lang.Runnable
 import kotlin.coroutines.cancellation.CancellationException
 import com.github.knightwood.downloader.core.model.*
 import com.github.knightwood.downloader.core.task.currentStatus
+import com.github.knightwood.downloader.core.task.isCancelled
+import com.github.knightwood.downloader.core.task.isDownloading
+import com.github.knightwood.downloader.core.task.isFinished
+import com.github.knightwood.downloader.core.task.isPaused
 import com.github.knightwood.downloader.core.util.HttpConstant
 import java.io.Closeable
 
@@ -97,6 +101,14 @@ class TaskScheduler(
         null
     }
 
+    /**
+     * 执行任务
+     *
+     * 注:
+     * 在[close]方法中会取消所有正在执行下载的job以关闭所有任务, 在[runTask]中理应在捕获到cancel异常时安全的停止当前任务,
+     * 实际上不做额外处理停止任务也不会有问题, UI层实现了持久化，下次打开app, 无非记录的任务的最后状态是下载状态,
+     * app可以立即按照最后的下载进度自动执行下载,也可以将状态更改到暂停状态等待手动下载, 因此不会对任务本身产生错误
+     */
     private suspend fun runTask(id: Int) {
         try {
             val task = all[id]!!
@@ -106,6 +118,7 @@ class TaskScheduler(
             }
         } catch (e: CancellationException) {
             logger.error("task inner canceled, but we should not handle it", e)
+            throw e
         } catch (e: Throwable) {
             logger.error("task failed", e)
         }
@@ -148,8 +161,13 @@ class TaskScheduler(
         if (removed) { //还在排队, 从等待队列移除后直接返回即可
             return
         }
-        // 正在执行的,需要取消下载
-        all[id]?.cancel()
+        all[id]?.let { task ->
+            if (task.currentStatus.isTerminalState) {
+                return
+            } else {
+                task.cancel() // 正在执行的,需要取消下载
+            }
+        }
     }
 
     /**

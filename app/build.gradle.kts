@@ -10,11 +10,14 @@ android {
     defaultConfig {
         applicationId = "com.github.knightwood.downloader.app"
         minSdk = 24
-        targetSdk =36
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
         vectorDrawables {
             useSupportLibrary = true
+        }
+        ndk {
+            abiFilters.addAll(listOf("arm64-v8a", "x86_64"))
         }
     }
 
@@ -78,4 +81,7 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     implementation(libs.androidx.activity.compose)
 
+    implementation(project.dependencies.platform(libs.koin.bom))
+    implementation(libs.koin.core)
+    implementation(libs.koin.core.android)
 }

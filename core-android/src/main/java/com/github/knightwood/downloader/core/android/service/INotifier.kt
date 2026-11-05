@@ -15,13 +15,25 @@ import com.github.knightwood.downloader.core.android.R
 import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
 import com.github.knightwood.downloader.core.android.util.ApkUtil
 import com.github.knightwood.downloader.core.android.util.Constant
-import com.github.knightwood.downloader.core.util.toDataUnit
+import com.github.knightwood.downloader.core.util.DownloadFormat
 import kotlin.math.roundToInt
 
 interface INotifier {
+    /**
+     * 前台服务通知id/默认通知id
+     */
     val NOTIFY_ID: Int
+    /**
+     * 通知渠道id
+     */
     val CHANNEL_ID: String
+    /**
+     * 通知渠道名称
+     */
     val CHANNEL_NAME: String
+    /**
+     * 通知渠道描述
+     */
     val CHANNEL_DESC: String
 
     fun foregroundNotification(context: Context): Notification
@@ -46,10 +58,13 @@ open class DefaultDownloadNotifierImpl : INotifier {
     override val CHANNEL_DESC: String = Constant.DEFAULT_CHANNEL_DESC
     override val NOTIFY_ID: Int = Constant.DEFAULT_NOTIFY_ID
     val TAG: String = "DownloadNotifier"
-
+    val Double?.toDataUnit: String?
+        get() {
+            return DownloadFormat.formatSpeed(this)
+        }
     override fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val importance = NotificationManager.IMPORTANCE_HIGH
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
@@ -108,7 +123,7 @@ open class DefaultDownloadNotifierImpl : INotifier {
                     )
                 )
                 Log.d(TAG,"已下载:${state.progress.downloaded}; 总长度:${state.progress.length}; 进度:${progressRecord.percentage.roundToInt()}/100")
-                builder.setProgress(100, progressRecord.percentage.roundToInt(), false)
+                builder.setProgress(100, progressRecord.percentage.roundToInt() * 100, false)
             }
 
             DownloadStatus.PAUSED -> {
@@ -181,7 +196,7 @@ open class ApkUpdateNotifierImpl : DefaultDownloadNotifierImpl() {
                         "${progressRecord.averageSpeed.toDataUnit}/s",
                     )
                 )
-                builder.setProgress(progressRecord.length.toInt(), progressRecord.downloaded.toInt(), true)
+                builder.setProgress(100, progressRecord.percentage.roundToInt() * 100, false)
                 builder.build()
             }
 

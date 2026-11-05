@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.DocumentsContract
 import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.compose.runtime.Stable
@@ -19,11 +20,13 @@ import com.github.knightwood.downloader.core.android.model.TaskParams
 import com.github.knightwood.downloader.core.android.service.DownloadServiceLinker
 import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.model.DownloadStatus
+import com.github.knightwood.downloader.core.util.DownloadFormat
 import com.github.knightwood.downloader.core.util.HttpConnectionUtils
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.util.UrlResponseMeta
 import com.github.knightwood.downloader.ui.room.DownloadTaskDatabase
 import com.github.knightwood.downloader.ui.room.entity.DownloadTaskEntity
+import com.github.knightwood.downloader.ui.room.entity.SafPermissionEntity
 import com.github.knightwood.downloader.ui.room.model.AndroidPathType
 import com.github.knightwood.downloader.ui.room.model.DownloadStatusType
 import com.github.knightwood.downloader.ui.repository.DownloadTaskRepository
@@ -31,8 +34,7 @@ import com.github.knightwood.downloader.ui.repository.TaskRuntimeState
 import com.github.knightwood.downloader.ui.storage.DownloadTarget
 import com.github.knightwood.downloader.ui.storage.DownloadTargetResolver
 import com.github.knightwood.downloader.ui.util.OperateLocker
-import com.github.knightwood.downloader.ui.util.calculateProgress
-import com.github.knightwood.downloader.ui.util.sanitizeFileName
+import com.github.knightwood.downloader.ui.util.SqlUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -54,7 +56,7 @@ import kotlinx.coroutines.withContext
  *
  * 数据流：
  * ```
- * DownloadServiceLinker ──(stateFlow + currentDownloadingProgress)──> DownloadTaskRepository
+ * DownloadServiceLinker ──(eventFlow + progressFlow)──> DownloadTaskRepository
  *                                          │
  *        ┌───────────────┴───────────────┐
  *   状态变化写库（Room）                 进度发布到内存（runtimeStates）
@@ -64,13 +66,14 @@ import kotlinx.coroutines.withContext
  *                        界面
  * ```
  * 历史记录从数据库加载，运行中任务的进度直接从 [DownloadTaskRepository.runtimeStates]
- * （即 `DownloadTask` 的 `stateFlow`/`currentDownloadingProgress`）读取，不经过数据库。
+ * （即 `DownloadTask` 的 `eventFlow`/`progressFlow`）读取，不经过数据库。
  */
 @Stable
 class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(application) {
 
     private val TAG = javaClass.simpleName
     private val dao = DownloadTaskDatabase.getInstance(application).downloadTaskDao()
+    private val safPermissionDao = DownloadTaskDatabase.getInstance(application).safPermissionDao()
     private val repository = DownloadTaskRepository(dao, viewModelScope)
 
     /** 任务列表：数据库记录 + 服务中任务的实时状态/进度 */
@@ -94,6 +97,18 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
     /** 一次性提示消息 */
     private val _messages = Channel<String>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
+
+    /** SAF 已授权的文件夹列表（来自数据库，供选择弹窗加载） */
+    val safPermissions: StateFlow<List<SafPermissionEntity>> = safPermissionDao.observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 是否展示 SAF 文件夹选择弹窗 */
+    private val _showSafSelector = MutableStateFlow(false)
+    val showSafSelector: StateFlow<Boolean> = _showSafSelector.asStateFlow()
+
+    /** 一次性事件：通知宿主界面拉起系统文件夹选择器 */
+    private val _openSystemPicker = Channel<Unit>(Channel.BUFFERED)
+    val openSystemPicker = _openSystemPicker.receiveAsFlow()
 
     private var probeJob: Job? = null
 
@@ -198,18 +213,114 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
     }
 
     /**
+     * 点击“自定义文件夹”
+     *
+     * - 表中没有授权记录：直接拉起系统选择器让用户选取并记录
+     * - 已有授权记录：弹出 [SAFSelectorDialog] 供用户选择/管理
+     */
+    fun onPickCustomFolder() {
+        viewModelScope.launch {
+            if (safPermissionDao.count() > 0) {
+                _showSafSelector.value = true
+            } else {
+                _openSystemPicker.trySend(Unit)
+            }
+        }
+    }
+
+    /** 弹窗内点击“新增文件夹”，拉起系统选择器（选择结果返回后会自动记录） */
+    fun onAddNewSafDirectory() {
+        viewModelScope.launch { _openSystemPicker.send(Unit) }
+    }
+
+    fun dismissSafSelector() {
+        _showSafSelector.value = false
+    }
+
+    /**
      * SAF 目录选择完成
      *
-     * 同时申请该目录的持久化权限，避免重启后无法再次写入
+     * 申请该目录的持久化读写权限，并把目录信息与授权状态记录到数据库，
+     * 避免重启后无法再次写入。
      */
     fun onSafTreeSelected(treeUri: Uri) {
-        runCatching {
+        val granted = runCatching {
             getApplication<Application>().contentResolver.takePersistableUriPermission(
                 treeUri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
+        }.isSuccess
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val existing = safPermissionDao.findByTreeUri(treeUri.toString())
+            val entity = SafPermissionEntity(
+                id = existing?.id ?: 0L,
+                treeUri = treeUri.toString(),
+                displayName = queryTreeDisplayName(treeUri),
+                hasWritePermission = granted,
+                createTime = existing?.createTime ?: now,
+                updateTime = now,
+            )
+            safPermissionDao.upsert(entity)
+            _showSafSelector.value = false
+            onTargetChanged(DownloadTarget.SafDirectory(treeUri))
+            if (!granted) _messages.trySend("已记录目录，但未取得持久化权限，重启后可能需要重新授权")
         }
-        onTargetChanged(DownloadTarget.SafDirectory(treeUri))
+    }
+
+    /**
+     * 从 [SAFSelectorDialog] 中选择一条已有的授权记录
+     */
+    fun onSafDirectoryChosen(permission: SafPermissionEntity) {
+        viewModelScope.launch {
+            safPermissionDao.touch(permission.id, System.currentTimeMillis())
+            _showSafSelector.value = false
+            onTargetChanged(DownloadTarget.SafDirectory(Uri.parse(permission.treeUri)))
+        }
+    }
+
+    /**
+     * 删除一条授权记录，同时释放系统侧的持久化权限
+     */
+    fun onDeleteSafPermission(permission: SafPermissionEntity) {
+        viewModelScope.launch {
+            runCatching {
+                getApplication<Application>().contentResolver.releasePersistableUriPermission(
+                    Uri.parse(permission.treeUri),
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                )
+            }
+            safPermissionDao.deleteById(permission.id)
+            // 若当前表单选中的正是被删除的目录，回退到默认位置
+            if ((_newTask.value.target as? DownloadTarget.SafDirectory)?.treeUri?.toString() == permission.treeUri) {
+                onTargetChanged(DownloadTarget.AppCache)
+            }
+        }
+    }
+
+    /**
+     * 查询 tree uri 对应的目录展示名称，失败时回退为 lastPathSegment
+     */
+    private suspend fun queryTreeDisplayName(treeUri: Uri): String = withContext(Dispatchers.IO) {
+        val app = getApplication<Application>()
+        runCatching {
+            val documentUri = DocumentsContract.buildDocumentUriUsingTree(
+                treeUri,
+                DocumentsContract.getTreeDocumentId(treeUri),
+            )
+            app.contentResolver.query(
+                documentUri,
+                arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                null, null, null,
+            )?.use { cursor ->
+                val index = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                if (cursor.moveToFirst() && index >= 0) {
+                    cursor.getString(index)
+                } else null
+            }
+        }.getOrNull()
+            ?: treeUri.lastPathSegment
+            ?: treeUri.toString()
     }
 
     fun onStoragePermissionResult(granted: Boolean) {
@@ -251,11 +362,17 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
                     // 探测期间地址已被修改，丢弃本次结果
                     state.url.trim() != url -> state
                     meta == null -> state.copy(probe = ProbeState.Failed("无法获取文件信息，请检查下载地址或网络"))
-                    else -> state.copy(
-                        probe = ProbeState.Success(meta),
-                        fileName = if (state.fileName.isBlank()) sanitizeFileName(meta.fileName) else state.fileName,
-                        chunkEnabled = meta.acceptRanges && DownloadTarget.supportsParallel(state.target),
-                    ).normalized()
+                    else -> {
+                        val fileName = if (state.fileName.isBlank()) DownloadFormat.sanitizeFileName(meta.fileName) else state.fileName
+                        // 与数据库中已有记录重名时，在文件名后追加序号避免冲突
+                        val uniqueFileName = makeUniqueFileName(fileName)
+
+                        state.copy(
+                            probe = ProbeState.Success(meta),
+                            fileName = uniqueFileName,
+                            chunkEnabled = meta.acceptRanges && DownloadTarget.supportsParallel(state.target),
+                        ).normalized()
+                    }
                 }
             }
         }
@@ -271,7 +388,8 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
         viewModelScope.launch {
             val app = getApplication<Application>()
             val url = state.url.trim()
-            val fileName = sanitizeFileName(state.fileName)
+            var fileName = DownloadFormat.sanitizeFileName(state.fileName)
+            fileName = makeUniqueFileName(fileName)
             val mimeType = guessMimeType(fileName)
 
             if (!hasWritePermission(app, state.target)) {
@@ -347,6 +465,28 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
             ?: "application/octet-stream"
     }
 
+    /**
+     * 生成与数据库已有记录不重复的文件名
+     *
+     * 未重名时原样返回；重名时在文件名主体与扩展名之间追加递增序号，
+     * 例如 `app.apk` -> `app(1).apk`、`app(2).apk`，扩展名保持不变。
+     */
+    private suspend fun makeUniqueFileName(fileName: String): String {
+        val existing = dao.getAllNamesLike(SqlUtils.escapeLike(fileName)).toHashSet()
+        if (fileName !in existing) return fileName
+        val dot = fileName.lastIndexOf('.')
+        val hasExtension = dot > 0
+        val base = if (hasExtension) fileName.substring(0, dot) else fileName
+        val extension = if (hasExtension) fileName.substring(dot) else ""
+        var index = 1
+        var candidate: String
+        do {
+            candidate = "$base($index)$extension"
+            index++
+        } while (candidate in existing)
+        return candidate
+    }
+
     //</editor-fold>
 
     /**
@@ -398,10 +538,14 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
     }
 
     private fun DownloadTaskEntity.toUiItemWithRecord(): DownloadTaskItem {
+        Log.d(TAG, "toUiItemWithRuntime: $taskId $name $status $totalSize $downloadedSize")
         return DownloadTaskItem(
             taskId = taskId,
             name = name,
             url = url,
+            /* 正在执行下载时将进程杀死, 重新打开app后读取的记录每个都将是downloading状态, 但此时不会因为他们是downloading状态就自动执行下载
+             要么自动执行下载,要么重置为暂停状态,由于
+             DownloadTaskRepository#syncWithService会将原本处理正在下载状态的任务状态更改为暂停,这里就不在重复处理*/
             state = status,
             totalSize = this.totalSize,
             downloadedSize = this.downloadedSize,
@@ -441,7 +585,7 @@ data class DownloadTaskItem(
         get() = if (state == DownloadStatusType.FINISHED) {
             1f
         } else {
-            calculateProgress(downloadedSize, totalSize)
+            DownloadFormat.calculateProgress(downloadedSize, totalSize).toFloat()
         }
 }
 

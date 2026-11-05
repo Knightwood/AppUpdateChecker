@@ -1,6 +1,7 @@
 package com.github.knightwood.downloader.core.model
 
 import com.github.knightwood.downloader.core.executor.DownloadExecutor
+import com.github.knightwood.downloader.core.util.DownloadFormat
 
 /**
  * 反应当前[DownloadExecutor]下载状态、进度
@@ -92,11 +93,10 @@ data class DownloadProgressRecord(
 ) {
     /**
      * 当前下载进度百分比
+     * 0.0 - 1.0
      */
     val percentage: Double
         get() {
-            if (length == 0L) return 0.0
-            val curr = (downloaded * 1.0 / length) * 100.0
-            return curr
+            return DownloadFormat.calculateProgress(downloaded, length)
         }
 }

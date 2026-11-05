@@ -8,8 +8,11 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import com.github.knightwood.downloader.ui.room.converter.DownloadConverters
 import com.github.knightwood.downloader.ui.room.dao.DownloadTaskDao
+import com.github.knightwood.downloader.ui.room.dao.SafPermissionDao
 import com.github.knightwood.downloader.ui.room.entity.DownloadChunkEntity
 import com.github.knightwood.downloader.ui.room.entity.DownloadTaskEntity
+import com.github.knightwood.downloader.ui.room.entity.SafPermissionEntity
+import com.github.knightwood.downloader.ui.room.migrations.MIGRATION_1_2
 
 /**
  *
@@ -18,6 +21,7 @@ import com.github.knightwood.downloader.ui.room.entity.DownloadTaskEntity
  * 表结构：
  * - [DownloadTaskEntity]：一条记录对应一个下载任务，主键为任务id
  * - [DownloadChunkEntity]：分块下载进度，主键为 (任务id, 分块序号)，随任务级联删除
+ * - [SafPermissionEntity]：SAF 框架授权的文件夹记录，主键自增、tree uri 唯一
  *
  * 修改表结构时需要提升 [version]，并在 `room/migrations` 包下新增 `Migration`，
  * 加入 [MIGRATIONS] 列表；数据库 schema 导出目录为 `ui/schemas`（见 build.gradle.kts）。
@@ -26,6 +30,7 @@ import com.github.knightwood.downloader.ui.room.entity.DownloadTaskEntity
     entities = [
         DownloadTaskEntity::class,
         DownloadChunkEntity::class,
+        SafPermissionEntity::class,
     ],
     version = DownloadTaskDatabase.VERSION,
     exportSchema = true,
@@ -35,14 +40,18 @@ abstract class DownloadTaskDatabase : RoomDatabase() {
 
     abstract fun downloadTaskDao(): DownloadTaskDao
 
+    abstract fun safPermissionDao(): SafPermissionDao
+
     companion object {
         const val DATABASE_NAME = "download_task.db"
-        const val VERSION = 1
+        const val VERSION = 2
 
         /**
          * 数据库升级迁移，新增版本时在此追加
          */
-        private val MIGRATIONS = emptyArray<Migration>()
+        private val MIGRATIONS = arrayOf<Migration>(
+            MIGRATION_1_2,
+        )
 
         @Volatile
         private var instance: DownloadTaskDatabase? = null
