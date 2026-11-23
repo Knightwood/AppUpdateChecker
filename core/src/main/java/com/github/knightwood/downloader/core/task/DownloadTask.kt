@@ -18,6 +18,7 @@ import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.model.DownloadTaskSaveState
 import com.github.knightwood.downloader.core.model.TaskQueueType
+import com.github.knightwood.downloader.core.model.isTerminalState
 import com.github.knightwood.downloader.core.taskmgr.TaskScheduler
 import kotlinx.coroutines.flow.MutableSharedFlow
 import org.slf4j.LoggerFactory
@@ -131,6 +132,7 @@ open class DownloadTask(
      * 调用此方法后会立即挂起协程, 直到任务状态被更新到[DownloadStatus.CANCELED]
      */
     suspend fun cancel() {
+        if (currentStatus.isTerminalState) return
         executor.cancel()
         _stateFlow.first { status ->
             status is DownloadStatus.CANCELED
@@ -199,6 +201,7 @@ val DownloadTask.isPaused get() = stateFlow.value is DownloadStatus.PAUSED
 val DownloadTask.isFailed get() = stateFlow.value is DownloadStatus.ERROR
 val DownloadTask.isCancelled get() = stateFlow.value is DownloadStatus.CANCELED
 val DownloadTask.isFinished get() = stateFlow.value is DownloadStatus.FINISHED
+val DownloadTask.isTerminal get() = stateFlow.value.isTerminalState
 
 /**
  * 此方法根据任务当前状态映射成任务所处队列类型.

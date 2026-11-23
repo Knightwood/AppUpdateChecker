@@ -21,11 +21,11 @@ class OperateLocker(val scope: CoroutineScope) {
      * @param op 实际要执行的操作
      */
     fun launchTaskOp(op: suspend () -> Unit) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastTaskOpTime < taskOpDebounceMs) {
+            return
+        }
         scope.launch {
-            val now = android.os.SystemClock.elapsedRealtime()
-            if (now - lastTaskOpTime < taskOpDebounceMs) {
-                return@launch
-            }
             if (!taskOpMutex.tryLock()) {
                 // 已有操作在执行，丢弃本次请求
                 return@launch

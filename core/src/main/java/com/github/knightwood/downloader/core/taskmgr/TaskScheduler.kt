@@ -162,11 +162,7 @@ class TaskScheduler(
             return
         }
         all[id]?.let { task ->
-            if (task.currentStatus.isTerminalState) {
-                return
-            } else {
-                task.cancel() // 正在执行的,需要取消下载
-            }
+            task.cancel() // 正在执行的,需要取消下载
         }
     }
 

@@ -1,4 +1,4 @@
-package com.github.knightwood.downloader.core.android.util
+package com.github.knightwood.downloader.updater
 
 import android.content.Context
 import android.content.Intent
@@ -8,6 +8,7 @@ import android.os.Build
 import androidx.core.content.FileProvider
 import com.github.knightwood.downloader.core.android.model.AndroidPath
 import com.github.knightwood.downloader.core.android.model.copyTo
+import com.github.knightwood.downloader.core.android.util.Constant
 import java.io.File
 import java.util.Date
 

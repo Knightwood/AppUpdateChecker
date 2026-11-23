@@ -8,6 +8,7 @@ import android.content.ServiceConnection
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.ServiceCompat
 
 import kotlinx.coroutines.CoroutineName
@@ -36,8 +37,10 @@ import com.github.knightwood.downloader.core.task.currentStatus
 import com.github.knightwood.downloader.core.taskmgr.TaskScheduler
 import kotlinx.coroutines.currentCoroutineContext
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.random.Random
 
 class DownloadService : Service() {
+    private val TAG = "DownloadService"
     private val scope: CoroutineScope =
         CoroutineScope(Dispatchers.IO) + SupervisorJob() + CoroutineName(Constant.COROUTINE_NAME)
     private var bomb: Job? = null
@@ -96,6 +99,24 @@ class DownloadService : Service() {
             taskMgr.cancel(id)
         }
 
+        override fun runTaskDirectly(conf: AndroidDownloadParams): DownloadTask {
+            generateTask(Random.nextInt(10000, 100000), conf)
+            val downloadTask = generateTask(Random.nextInt(10000, 100000), conf)
+            scope.launch(CoroutineName("runTaskDirectly:${downloadTask.id}")) {
+                launch {
+                    try {
+                        downloadTask.execute()
+                    } catch (ignore: CancellationException) {
+                        throw ignore
+                    } catch (e: Throwable) {
+                        Log.e(TAG, "task failed", e)
+                    }
+                }
+                processTaskState(downloadTask, conf, false)
+            }
+            return downloadTask
+        }
+
         override fun stopService() {
             stopSelf()
         }
@@ -122,8 +143,9 @@ class DownloadService : Service() {
         Downloader.mNotifier.createNotificationChannel(applicationContext)
         taskMgr.run()
         taskMgr.setActiveTaskProcessor { currTask ->
-            scope.launch(CoroutineName("processTaskState${currTask.id}")) {
-                processTaskState(currTask)
+            scope.launch(CoroutineName("processTaskState:${currTask.id}")) {
+                val params = paramsMap[currTask.id]!!
+                processTaskState(currTask, params)
             }
         }
     }
@@ -189,9 +211,8 @@ class DownloadService : Service() {
         )
     }
 
-    private suspend fun processTaskState(currTask: DownloadTask) {
+    private suspend fun processTaskState(currTask: DownloadTask, params: AndroidDownloadParams, fromTaskMgr: Boolean = true) {
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        val params = paramsMap[currTask.id]!!
         currTask.eventFlow.collect { state ->
             if (params.taskParams.enableNotification == true) {
                 val notifier = params.taskParams.mNotifier!!

@@ -38,6 +38,10 @@ abstract class DownloadServiceLinker : Binder() {
 
     abstract suspend fun cancelTask(id: Int)
 
+    //<editor-fold desc="脱离任务管理器运行任务">
+    abstract fun runTaskDirectly(conf: AndroidDownloadParams): DownloadTask
+    //</editor-fold>
+
     abstract fun stopService()
 
     abstract suspend fun saveState(): AndroidDownloadTaskSaveState

@@ -4,24 +4,22 @@ import com.github.knightwood.downloader.core.android.IDownloadedHandler
 import com.github.knightwood.downloader.core.executor.IDownloadExecutor
 import com.github.knightwood.downloader.core.android.util.Constant
 import com.github.knightwood.downloader.core.android.Downloader
-import com.github.knightwood.downloader.core.android.Downloader.authorities
-import com.github.knightwood.downloader.core.android.service.ApkUpdateNotifierImpl
 import com.github.knightwood.downloader.core.android.service.INotifier
-import com.github.knightwood.downloader.core.android.util.ApkUtil
 import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.util.HttpConstant
 import com.github.knightwood.downloader.core.task.DownloadTask
 import com.github.knightwood.downloader.core.util.DownloadFormat
 
-class AndroidDownloadParams() {
+data class AndroidDownloadParams(
+    var fileEntity: FileEntity = FileEntity(),
+    var taskParams: TaskParams = TaskParams(),
+) {
 
-    var fileEntity: FileEntity = FileEntity()
     fun file(action: FileEntity.() -> Unit): AndroidDownloadParams {
         fileEntity = FileEntity().apply(action)
         return this
     }
 
-    var taskParams: TaskParams = TaskParams()
     fun task(action: TaskParams.() -> Unit): AndroidDownloadParams {
         taskParams = TaskParams().apply(action)
         return this
@@ -30,6 +28,17 @@ class AndroidDownloadParams() {
 
 /**
  * 文件信息
+ * @param url 文件下载地址
+ * @param mimeType 文件类型
+ * @param name 文件名
+ * @param size 文件大小（可选）
+ * @param description 文件描述（可选）
+ * @param version 文件版本（可选）
+ * @param versionCode 文件版本号（可选）
+ * @param date 文件日期（可选）
+ * @param fileUID 不同的任务实例可以下载同一个文件，使用此字段标识文件唯一性（可选）
+ * @param md5 文件md5值（可选）
+ * @property sizeText 文件大小文本，比如1MB，100MB
  */
 class FileEntity(
     var url: String = "",
@@ -41,6 +50,7 @@ class FileEntity(
     var version: String? = null,
     var versionCode: Int? = null,
     var date: String? = null,
+    var fileUID: String? = null,
     var md5: String? = null,
 ) {
     /** 人类可读的size 比如1MB */
@@ -65,6 +75,7 @@ class TaskParams {
 
     /**
      * 记录文件存储位置
+     * 例如 /storage/emulated/0/Android/data/com.example.app/files/Download/example.apk
      */
     var path: AndroidPath? = null
 
@@ -84,7 +95,7 @@ class TaskParams {
      * 上次的下载进度，用于执行旧任务时恢复进度，断点续传
      * 为了恢复任务进度，除了传递此参数，还可以创建任务后使用[DownloadTask.restoreProgress]恢复进度
      */
-    var lastDownloadProgress : DownloadProgressRecord? = null
+    var lastDownloadProgress: DownloadProgressRecord? = null
 
     /**
      * 提供自定义下载执行器
@@ -108,16 +119,5 @@ class TaskParams {
     var postHandler: IDownloadedHandler? = null
         get() = field ?: Downloader.postHandler
 
-
-    companion object {
-
-        val updateApkConf = TaskParams().apply {
-            postHandler = IDownloadedHandler { context, path, id, conf ->
-                ApkUtil.installApk(context, authorities(context), path!!)
-            }
-            enableNotification = true
-            mNotifier = ApkUpdateNotifierImpl()
-        }
-    }
 }
 

@@ -58,11 +58,13 @@ android {
 dependencies {
     implementation(project(":core-android"))
     implementation(project(":ui"))
+    implementation(project(":updater"))
     implementation(libs.slf4j.logback.androidlog)
 
     implementation(libs.androidx.constraintLayout)
     implementation(libs.androidx.appCompat)
     implementation(libs.androidx.activity.ktx)
+    implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlin.coroutines.core)
     implementation(libs.kotlin.coroutines.android)

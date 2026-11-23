@@ -7,5 +7,4 @@
     <string name="download_notify_finish">"%s"下载完成</string>
     <string name="download_notify_paused">"%s"下载暂停中</string>
     <string name="download_notify_continue">点击继续下载</string>
-    <string name="app_update_click_hint">点击进行安装</string>
 </resources>

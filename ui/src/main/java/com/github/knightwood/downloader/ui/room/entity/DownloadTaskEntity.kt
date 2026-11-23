@@ -38,6 +38,16 @@ data class DownloadTaskEntity(
     @ColumnInfo(name = DownloadTaskEntity.COLUMN_TASK_ID)
     val taskId: Int,
 
+    //<editor-fold desc="记录扩展">
+
+    /**
+     * 分类id
+     */
+    @ColumnInfo(name = "category_id", defaultValue = "NULL")
+    val categoryId: Long? = null,
+
+    //</editor-fold>
+
     //<editor-fold desc="文件信息(FileEntity)">
     /** 下载地址 */
     @ColumnInfo(name = "url")
@@ -70,6 +80,10 @@ data class DownloadTaskEntity(
     /** 文件日期（字符串，格式由服务端决定） */
     @ColumnInfo(name = "date")
     val date: String? = null,
+
+    /** 文件唯一标识 */
+    @ColumnInfo(name = "file_uid")
+    val fileUID: String? = null,
 
     /** 文件md5 */
     @ColumnInfo(name = "md5")

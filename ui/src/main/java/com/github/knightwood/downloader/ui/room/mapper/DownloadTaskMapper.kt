@@ -107,6 +107,7 @@ fun DownloadTaskEntity.toDownloadParams(chunks: List<DownloadChunkEntity> = empt
         version = this@toDownloadParams.version,
         versionCode = this@toDownloadParams.versionCode,
         date = this@toDownloadParams.date,
+        fileUID = this@toDownloadParams.fileUID,
         md5 = this@toDownloadParams.md5,
     )
     taskParams = TaskParams().apply {
@@ -239,6 +240,7 @@ fun DownloadTaskSaveState.toTaskEntity(
         version = fileEntity?.version,
         versionCode = fileEntity?.versionCode,
         date = fileEntity?.date,
+        fileUID = fileEntity?.fileUID,
         md5 = fileEntity?.md5 ?: conf.md5,
         dirPath = conf.dirPath.toString(),
         isSupportChunkDownload = taskParams?.isSupportChunkDownload ?: conf.isSupportChunkDownload,

@@ -9,10 +9,13 @@ import java.io.File
 class FileStorageImpl(
     val fileProvider: () -> File,
 ) : FileStorage {
-    val sink by lazy { fileProvider().sink().buffer() }
+    val sink by lazy { file().sink().buffer() }
 
     private fun file(): File {
         return fileProvider().apply {
+            if (!this.parentFile.exists()) {
+                this.parentFile.mkdirs()
+            }
             if (!exists()) {
                 this.createNewFile()
             }
