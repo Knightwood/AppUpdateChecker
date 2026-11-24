@@ -46,6 +46,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        viewBinding = true
     }
 
     packaging {
@@ -59,6 +60,7 @@ dependencies {
     implementation(project(":core-android"))
     implementation(project(":ui"))
     implementation(project(":updater"))
+    implementation(project(":updater-example"))
     implementation(libs.slf4j.logback.androidlog)
 
     implementation(libs.androidx.constraintLayout)

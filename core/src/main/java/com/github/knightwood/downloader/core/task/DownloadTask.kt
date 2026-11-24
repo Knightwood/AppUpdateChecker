@@ -133,6 +133,8 @@ open class DownloadTask(
      */
     suspend fun cancel() {
         if (currentStatus.isTerminalState) return
+        // fixme: 任务处于STARTING状态时取消会有问题，暂不清楚什么原因
+        if (currentStatus is DownloadStatus.STARTING) return
         executor.cancel()
         _stateFlow.first { status ->
             status is DownloadStatus.CANCELED

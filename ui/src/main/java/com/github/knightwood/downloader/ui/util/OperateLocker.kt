@@ -4,7 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 
-class OperateLocker(val scope: CoroutineScope) {
+class OperateLocker() {
     /** 任务操作串行锁，同一时间只允许一个操作执行 */
     private val taskOpMutex = Mutex()
 
@@ -20,22 +20,25 @@ class OperateLocker(val scope: CoroutineScope) {
 
      * @param op 实际要执行的操作
      */
-    fun launchTaskOp(op: suspend () -> Unit) {
-        val now = android.os.SystemClock.elapsedRealtime()
-        if (now - lastTaskOpTime < taskOpDebounceMs) {
+   suspend fun launchTaskOp(op: suspend () -> Unit) {
+        if (!taskOpMutex.tryLock()) {
+            // 已有操作在执行，丢弃本次请求
             return
         }
+        try {
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (now - lastTaskOpTime < taskOpDebounceMs) {
+                return
+            }
+            lastTaskOpTime = android.os.SystemClock.elapsedRealtime()
+            op()
+        } finally {
+            taskOpMutex.unlock()
+        }
+   }
+    fun launchTaskOp(scope: CoroutineScope, op: suspend () -> Unit) {
         scope.launch {
-            if (!taskOpMutex.tryLock()) {
-                // 已有操作在执行，丢弃本次请求
-                return@launch
-            }
-            try {
-                lastTaskOpTime = android.os.SystemClock.elapsedRealtime()
-                op()
-            } finally {
-                taskOpMutex.unlock()
-            }
+            launchTaskOp(op)
         }
     }
 

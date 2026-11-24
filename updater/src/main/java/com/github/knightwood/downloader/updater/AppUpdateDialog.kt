@@ -15,21 +15,18 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.FragmentManager
-import com.github.knightwood.downloader.core.android.Downloader
-import com.github.knightwood.downloader.core.android.IDownloadedHandler
-import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
-import com.github.knightwood.downloader.core.android.model.AndroidPath
 import com.github.knightwood.downloader.core.android.service.DownloadService
 import com.github.knightwood.downloader.core.android.service.DownloadServiceLinker
+import com.github.knightwood.downloader.core.android.util.AppUtil
+import com.github.knightwood.downloader.ui.room.model.DownloadStatusType
 import com.github.knightwood.downloader.ui.R as UIR
 import com.github.knightwood.downloader.ui.util.NotificationPermissionHelper
-import okio.Path.Companion.toOkioPath
 
-class AppUpdateDialog(
-    val apkUpdaterParams: ApkUpdaterParams,
+open class AppUpdateDialog(
+    val params: ApkDownloadParams,
 ) : DialogFragment() {
     private var isBound = false
-    private var serviceLinker: DownloadServiceLinker? = null
+    protected var serviceLinker: DownloadServiceLinker? = null
 
     private val downloadServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
@@ -46,7 +43,9 @@ class AppUpdateDialog(
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        checkPermission()
+        if (params.forceUpdate) {
+            isCancelable = false
+        }
         linkDownloadService()
     }
 
@@ -54,21 +53,24 @@ class AppUpdateDialog(
         return ComposeView(requireContext()).apply {
             this.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
-                val currTask = AppUpdater.currTaskFlow.collectAsState()
+                val currTask = AppUpdater.currTaskFlow.collectAsState(null)
                 val taskState = currTask.value?.stateFlow?.collectAsState()
+                val taskProgressState = currTask.value?.progressFlow?.collectAsState()
                 AppUpdateDialogUI(
-                    params = apkUpdaterParams,
-                    stateProvider = { taskState?.value },
+                    params = params,
+                    stateProvider = { taskState?.value?.let { DownloadStatusType.of(it) } },
+                    progressProvider = { taskProgressState?.value },
                     onDismissRequest = { dismiss() },
                     onCancelDownloadRequest = {
                         AppUpdater.TaskControl.cancel()
                         dismiss()
                     },
                     onDownloadRequest = {
+                        checkPermission()
                         AppUpdater.secretDownload(
                             context = requireContext(),
                             linker = serviceLinker!!,
-                            paramProvider = { apkUpdaterParams }
+                            paramProvider = { params }
                         )
                     },
                     onPauseRequest = {
@@ -134,7 +136,7 @@ class AppUpdateDialog(
 
         fun display(
             fragmentManager: FragmentManager,
-            params: ApkUpdaterParams,
+            params: ApkDownloadParams,
         ) {
             val fragment = AppUpdateDialog(params)
             fragment.show(fragmentManager, "AppUpdateDialog#${params.updateId}")

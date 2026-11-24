@@ -1,6 +1,7 @@
 package com.github.knightwood.downloader.updater
 
-import com.github.knightwood.downloader.core.util.DownloadFormat
+import androidx.compose.runtime.Immutable
+import com.github.knightwood.downloader.core.android.service.INotifier
 
 /**
  * Apk updater params
@@ -13,23 +14,21 @@ import com.github.knightwood.downloader.core.util.DownloadFormat
  * @property versionName the version name
  * @property description
  * @property md5
- * @property backgroundDownload the background download
  * @property enableNotify to enable notify
  * @property autoInstallAfterDownload the auto install after download
  */
-data class ApkUpdaterParams(
+@Immutable
+data class ApkDownloadParams(
     val updateId: String? = null,
     val url: String,
     val appName: String,
-    val versionCode: Int,
     val versionName: String,
     val description: String,
     val md5: String? = null,
     val size: Long? = null,
-    val sizeText: String = if (size != null) DownloadFormat.formatByteSize(size) else "",
-    val backgroundDownload: Boolean = false,
+
     val enableNotify: Boolean = true,
     val autoInstallAfterDownload: Boolean = true,
-) {
-
-}
+    var mNotifier: INotifier? = null,
+    var forceUpdate: Boolean = false,
+)

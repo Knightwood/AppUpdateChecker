@@ -137,34 +137,34 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
 
     //<editor-fold desc="任务操作">
 
-    val locker by lazy { OperateLocker(viewModelScope) }
-    fun pause(taskId: Int) = locker.launchTaskOp() {
+    val locker by lazy { OperateLocker() }
+    fun pause(taskId: Int) = locker.launchTaskOp(viewModelScope) {
         runCatching { repository.pause(taskId) }
             .onFailure { _messages.trySend("暂停任务失败: ${it.message}") }
     }
 
-    fun resume(taskId: Int) = locker.launchTaskOp() {
+    fun resume(taskId: Int) = locker.launchTaskOp(viewModelScope) {
         runCatching { repository.resume(taskId) }
             .onFailure { _messages.trySend("恢复任务失败: ${it.message}") }
     }
 
-    fun cancel(taskId: Int) = locker.launchTaskOp() {
+    fun cancel(taskId: Int) = locker.launchTaskOp(viewModelScope) {
         runCatching { repository.cancel(taskId) }
             .onFailure { _messages.trySend("停止任务失败: ${it.message}") }
     }
 
-    fun delete(taskId: Int) = locker.launchTaskOp() {
+    fun delete(taskId: Int) = locker.launchTaskOp(viewModelScope) {
         runCatching { repository.delete(taskId) }
             .onFailure { _messages.trySend("删除任务失败: ${it.message}") }
     }
 
-    fun retry(taskId: Int) = locker.launchTaskOp() {
+    fun retry(taskId: Int) = locker.launchTaskOp(viewModelScope) {
         repository.retry(taskId)
             .onSuccess { _messages.trySend("已重新加入下载队列") }
             .onFailure { _messages.trySend(it.message ?: "重新下载失败") }
     }
 
-    fun clearFinished() = locker.launchTaskOp() {
+    fun clearFinished() = locker.launchTaskOp(viewModelScope) {
         runCatching { repository.clearFinished() }
             .onSuccess { _messages.trySend("已清空已完成的任务记录") }
             .onFailure { _messages.trySend("清空失败: ${it.message}") }
@@ -363,7 +363,8 @@ class DownloadMgrScreenViewModel(application: Application) : AndroidViewModel(ap
                     state.url.trim() != url -> state
                     meta == null -> state.copy(probe = ProbeState.Failed("无法获取文件信息，请检查下载地址或网络"))
                     else -> {
-                        val fileName = if (state.fileName.isBlank()) DownloadFormat.sanitizeFileName(meta.fileName) else state.fileName
+                        val fileName =
+                            if (state.fileName.isBlank()) DownloadFormat.sanitizeFileName(meta.fileName) else state.fileName
                         // 与数据库中已有记录重名时，在文件名后追加序号避免冲突
                         val uniqueFileName = makeUniqueFileName(fileName)
 
