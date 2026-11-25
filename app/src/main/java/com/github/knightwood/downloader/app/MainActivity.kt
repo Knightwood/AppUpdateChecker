@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.coroutineScope
+import com.github.knightwood.downloader.core.android.util.ToastUtils
 import com.github.knightwood.downloader.ui.DownloadMgrActivity
 import com.github.knightwood.downloader.updater.AppUpdater
 import com.github.knightwood.downloader.updater.example.ColorfulUpdateDialog
@@ -32,9 +33,11 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         setContent {
             Scaffold() {
-                Column(modifier = Modifier
-                    .padding(it)
-                    .padding(horizontal = 12.dp)) {
+                Column(
+                    modifier = Modifier
+                        .padding(it)
+                        .padding(horizontal = 12.dp)
+                ) {
                     Button(onClick = {
                         startActivity(
                             Intent(this@MainActivity, DownloadMgrActivity::class.java)
@@ -56,7 +59,11 @@ class MainActivity : FragmentActivity() {
                         },
                         secretDownload = {
                             lifecycle.coroutineScope.launch {
-                                AppUpdater.secretDownload(this@MainActivity, stateHolder.paramProvider)
+                                runCatching {
+                                    AppUpdater.secretDownload(this@MainActivity, stateHolder.paramProvider)
+                                }.onFailure {
+                                    ToastUtils.showLong(this@MainActivity, it.message.toString())
+                                }
                             }
                         },
                     )
@@ -71,7 +78,7 @@ class MainActivity : FragmentActivity() {
                         Button(onClick = {
                             FullScreenUpdateDialog(
                                 stateHolder.paramProvider(),
-                            ).show(supportFragmentManager, "ColorfulUpdateDialog")
+                            ).show(supportFragmentManager, "FullScreenUpdateDialog")
                         }) {
                             Text("自定义弹窗2")
                         }

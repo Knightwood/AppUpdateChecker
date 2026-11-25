@@ -51,6 +51,5 @@ dependencies {
 
     compileOnly(project(":core"))
     compileOnly(project(":core-android"))
-    compileOnly(project(":ui"))
     compileOnly(project(":updater"))
 }

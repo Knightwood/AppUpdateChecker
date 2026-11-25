@@ -13,7 +13,9 @@ import com.github.knightwood.downloader.core.model.isTerminalState
 import com.github.knightwood.downloader.core.task.DownloadTask
 import com.github.knightwood.downloader.core.task.currentStatus
 import com.github.knightwood.downloader.core.util.FileUtil
-import com.github.knightwood.downloader.ui.util.OperateLocker
+import com.github.knightwood.downloader.updater.model.ApkDownloadParams
+import com.github.knightwood.downloader.updater.util.ApkUtil
+import com.github.knightwood.downloader.updater.util.OperateLocker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow

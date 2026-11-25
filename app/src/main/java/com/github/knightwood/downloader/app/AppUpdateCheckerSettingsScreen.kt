@@ -18,7 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.github.knightwood.downloader.updater.ApkDownloadParams
+import com.github.knightwood.downloader.updater.model.ApkDownloadParams
 
 
 @Composable

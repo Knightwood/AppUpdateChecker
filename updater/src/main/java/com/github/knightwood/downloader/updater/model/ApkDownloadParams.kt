@@ -1,4 +1,4 @@
-package com.github.knightwood.downloader.updater
+package com.github.knightwood.downloader.updater.model
 
 import androidx.compose.runtime.Immutable
 import com.github.knightwood.downloader.core.android.service.INotifier

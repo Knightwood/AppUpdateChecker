@@ -7,17 +7,19 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.task.currentStatus
 import com.github.knightwood.downloader.core.util.DownloadFormat
-import com.github.knightwood.downloader.updater.ApkDownloadParams
+import com.github.knightwood.downloader.updater.model.ApkDownloadParams
 import com.github.knightwood.downloader.updater.AppUpdateDialog
 import com.github.knightwood.downloader.updater.AppUpdater
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlin.onFailure
 
 open class ColorfulUpdateDialog(
     apkDownloadParams: ApkDownloadParams,
@@ -136,7 +138,11 @@ open class ColorfulUpdateDialog(
                 val currTaskState = AppUpdater.currTask?.currentStatus ?: DownloadStatus.IDLE
                 when (currTaskState) {
                     DownloadStatus.IDLE -> {
-                        AppUpdater.secretDownload(requireContext(), serviceLinker!!, { params })
+                        runCatching {
+                            AppUpdater.secretDownload(requireContext(), serviceLinker!!, { params })
+                        }.onFailure {
+                            Toast.makeText(requireContext(), it.message, Toast.LENGTH_LONG).show()
+                        }
                     }
 
                     is DownloadStatus.DOWNLOADING -> {

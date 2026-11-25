@@ -17,10 +17,9 @@ import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.FragmentManager
 import com.github.knightwood.downloader.core.android.service.DownloadService
 import com.github.knightwood.downloader.core.android.service.DownloadServiceLinker
-import com.github.knightwood.downloader.core.android.util.AppUtil
-import com.github.knightwood.downloader.ui.room.model.DownloadStatusType
-import com.github.knightwood.downloader.ui.R as UIR
-import com.github.knightwood.downloader.ui.util.NotificationPermissionHelper
+import com.github.knightwood.downloader.updater.model.ApkDownloadParams
+import com.github.knightwood.downloader.updater.model.DownloadStatusType
+import com.github.knightwood.downloader.updater.util.NotificationPermissionHelper
 
 open class AppUpdateDialog(
     val params: ApkDownloadParams,
@@ -66,12 +65,16 @@ open class AppUpdateDialog(
                         dismiss()
                     },
                     onDownloadRequest = {
-                        checkPermission()
-                        AppUpdater.secretDownload(
-                            context = requireContext(),
-                            linker = serviceLinker!!,
-                            paramProvider = { params }
-                        )
+                        runCatching {
+                            checkPermission()
+                            AppUpdater.secretDownload(
+                                context = requireContext(),
+                                linker = serviceLinker!!,
+                                paramProvider = { params }
+                            )
+                        }.onFailure {
+                            Toast.makeText(requireContext(), it.message, Toast.LENGTH_LONG).show()
+                        }
                     },
                     onPauseRequest = {
                         AppUpdater.TaskControl.pause()
@@ -93,8 +96,8 @@ open class AppUpdateDialog(
 
     private fun checkPermission() {
         NotificationPermissionHelper.builder(requireActivity())
-            .rationaleTitle(UIR.string.app_update_notify_permission_rationale_title)
-            .rationaleMessage(UIR.string.app_update_notify_permission_rationale_message)
+            .rationaleTitle(R.string.app_update_notify_permission_rationale_title)
+            .rationaleMessage(R.string.app_update_notify_permission_rationale_message)
             .showRationaleDialog(true)
             .onResult { result ->
                 when (result) {
@@ -105,7 +108,7 @@ open class AppUpdateDialog(
                     NotificationPermissionHelper.Result.DENIED_PERMANENTLY ->
                         Toast.makeText(
                             requireContext(),
-                            UIR.string.app_update_notify_permission_settings_title,
+                            R.string.app_update_notify_permission_settings_title,
                             Toast.LENGTH_LONG
                         ).show()
 

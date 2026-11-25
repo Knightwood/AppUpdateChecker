@@ -2,18 +2,16 @@ package com.github.knightwood.downloader.updater.example
 
 import android.annotation.SuppressLint
 import android.content.res.Configuration
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -25,7 +23,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.task.currentStatus
 import com.github.knightwood.downloader.core.util.DownloadFormat
-import com.github.knightwood.downloader.updater.ApkDownloadParams
+import com.github.knightwood.downloader.updater.model.ApkDownloadParams
 import com.github.knightwood.downloader.updater.AppUpdateDialog
 import com.github.knightwood.downloader.updater.AppUpdater
 import kotlinx.coroutines.flow.combine
@@ -58,55 +56,29 @@ open class FullScreenUpdateDialog(
             //    Android 15+ 已强制 edge-to-edge，这里对老系统同样有效；注意它会把
             //    isNavigationBarContrastEnforced 设回 true，所以下面对比度设置必须放在它之后
             WindowCompat.enableEdgeToEdge(window)
-
             // 2. 让 Dialog 窗口铺满整个屏幕（含状态栏、导航栏区域）
-            window.decorView.setPadding(0, 0, 0, 0)
-            window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            val wlp = window.getAttributes()
-            wlp.gravity = Gravity.CENTER;
-            //设置窗口的宽度为 MATCH_PARENT,效果是和屏幕宽度一样大
-            wlp.width = WindowManager.LayoutParams.MATCH_PARENT;
-            wlp.height = WindowManager.LayoutParams.MATCH_PARENT;
-            window.setAttributes(wlp);
+//            window.decorView.setPadding(0, 0, 0, 0)
+//            window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+//            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
 
-            // 3. 系统栏颜色：API 35 起 setStatusBarColor/setNavigationBarColor 已废弃且无效，
-            //    只在 35 以下兜底设置，避免报警和误解
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-                @Suppress("DEPRECATION")
-                window.statusBarColor = Color.TRANSPARENT
-                @Suppress("DEPRECATION")
-                window.navigationBarColor = Color.TRANSPARENT
-            }
-
-            // 4. 关闭导航栏“对比度保护”，否则三键导航底部会叠一层 80% 的黑
+            // 3. 关闭导航栏“对比度保护”，否则三键导航底部会叠一层 80% 的黑
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 @Suppress("DEPRECATION")
                 window.isNavigationBarContrastEnforced = false
             }
 
-            // 5. 窗口背景保持透明，由根布局的 ?android:attr/colorBackground 负责铺满
+            // 4. 窗口背景保持透明，由根布局的 ?android:attr/colorBackground 负责铺满
             window.setBackgroundDrawableResource(R.color.transparent)
 
-            // 6. 刘海/挖孔：API 35+ 非悬浮窗口会被系统强制当成 ALWAYS
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                window.attributes = window.attributes.apply {
-                    layoutInDisplayCutoutMode =
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-                        } else {
-                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                        }
-                }
-            }
-            // 7. 系统栏图标颜色：根据背景色自动调整为浅色或深色
-            val isLight = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) != Configuration.UI_MODE_NIGHT_YES
+            // 5. 系统栏图标颜色：根据背景色自动调整为浅色或深色
+            val isLight =
+                (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) != Configuration.UI_MODE_NIGHT_YES
             WindowInsetsControllerCompat(window, window.decorView).apply {
                 // 背景是浅色，系统栏图标用深色
                 isAppearanceLightStatusBars = isLight
                 isAppearanceLightNavigationBars = isLight
             }
-            // 8. 监听系统栏 insets 变化并更新内容区域 padding
+            // 6. 监听系统栏 insets 变化并更新内容区域 padding
             ViewCompat.setOnApplyWindowInsetsListener(window.decorView.findViewById(android.R.id.content)) { v, insets ->
                 val bars = insets.getInsets(
                     WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
@@ -217,7 +189,11 @@ open class FullScreenUpdateDialog(
                 val currTaskState = AppUpdater.currTask?.currentStatus ?: DownloadStatus.IDLE
                 when (currTaskState) {
                     DownloadStatus.IDLE -> {
-                        AppUpdater.secretDownload(requireContext(), serviceLinker!!, { params })
+                        runCatching {
+                            AppUpdater.secretDownload(requireContext(), serviceLinker!!, { params })
+                        }.onFailure {
+                            Toast.makeText(requireContext(), it.message, Toast.LENGTH_LONG).show()
+                        }
                     }
 
                     is DownloadStatus.DOWNLOADING -> {

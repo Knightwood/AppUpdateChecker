@@ -47,7 +47,6 @@ ksp {
 dependencies {
     compileOnly(project(":core"))
     compileOnly(project(":core-android"))
-    compileOnly(project(":ui"))
     implementation(libs.androidx.appCompat)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.ktx)

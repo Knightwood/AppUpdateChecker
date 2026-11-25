@@ -9,9 +9,9 @@ import com.github.knightwood.downloader.core.android.Downloader
 
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.android.R as CoreR
-import com.github.knightwood.downloader.updater.R
 import com.github.knightwood.downloader.core.android.model.AndroidDownloadParams
 import com.github.knightwood.downloader.core.android.service.DefaultDownloadNotifierImpl
+import com.github.knightwood.downloader.updater.util.ApkUtil
 import kotlin.math.roundToInt
 
 /**
@@ -50,7 +50,7 @@ open class ApkUpdateNotifierImpl : DefaultDownloadNotifierImpl() {
                         "${progressRecord.averageSpeed.toDataUnit}/s",
                     )
                 )
-                builder.setProgress(100, progressRecord.percentage.roundToInt() * 100, false)
+                builder.setProgress(100, (progressRecord.percentage * 100).roundToInt(), false)
                 builder.build()
             }
 

@@ -21,14 +21,17 @@ interface INotifier {
      * 前台服务通知id/默认通知id
      */
     val NOTIFY_ID: Int
+
     /**
      * 通知渠道id
      */
     val CHANNEL_ID: String
+
     /**
      * 通知渠道名称
      */
     val CHANNEL_NAME: String
+
     /**
      * 通知渠道描述
      */
@@ -60,6 +63,7 @@ open class DefaultDownloadNotifierImpl : INotifier {
         get() {
             return DownloadFormat.formatSpeed(this)
         }
+
     override fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val importance = NotificationManager.IMPORTANCE_DEFAULT
@@ -120,8 +124,11 @@ open class DefaultDownloadNotifierImpl : INotifier {
                         "${progressRecord.averageSpeed.toDataUnit}/s",
                     )
                 )
-                Log.d(TAG,"已下载:${state.progress.downloaded}; 总长度:${state.progress.length}; 进度:${progressRecord.percentage.roundToInt()}/100")
-                builder.setProgress(100, progressRecord.percentage.roundToInt() * 100, false)
+                Log.d(
+                    TAG,
+                    "已下载:${state.progress.downloaded}; 总长度:${state.progress.length}; 进度:${progressRecord.percentage * 100}"
+                )
+                builder.setProgress(100, ((progressRecord.percentage * 100).roundToInt()), false)
             }
 
             DownloadStatus.PAUSED -> {

@@ -15,7 +15,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import com.github.knightwood.downloader.core.model.DownloadProgressRecord
 import com.github.knightwood.downloader.core.util.DownloadFormat
-import com.github.knightwood.downloader.ui.room.model.DownloadStatusType
+import com.github.knightwood.downloader.updater.model.ApkDownloadParams
+import com.github.knightwood.downloader.updater.model.DownloadStatusType
 
 @Composable
 fun AppUpdateDialogUI(

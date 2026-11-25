@@ -53,13 +53,13 @@
 
     <!--全屏弹窗所需样式-->
     <style name="BaseFullscreenDialog" parent="Theme.Material3.DayNight.Dialog">
-        <item name="android:windowActionBar">false</item>
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:windowContentOverlay">@null</item>
-        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
+<!--        <item name="android:windowActionBar">false</item>-->
+<!--        <item name="android:windowNoTitle">true</item>-->
+<!--        <item name="android:windowContentOverlay">@null</item>-->
+<!--        <item name="android:windowDrawsSystemBarBackgrounds">true</item>-->
+<!--        <item name="android:windowBackground">@android:color/transparent</item>-->
         <item name="android:backgroundDimEnabled">false</item>
         <item name="android:windowIsFloating">false</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
+<!--        <item name="android:statusBarColor">@android:color/transparent</item>-->
     </style>
 </resources>
