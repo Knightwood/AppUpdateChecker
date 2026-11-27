@@ -2,6 +2,7 @@
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="?android:attr/colorBackground"
@@ -30,6 +31,15 @@
             android:text="@string/update_title"
             android:textAlignment="viewStart"
             android:textAppearance="@style/TextAppearance.Material3.DisplayMedium"
+            android:gravity="start"/>
+
+        <TextView
+            android:id="@+id/app_update_tv_version"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            tools:text="2026.01.01"
+            android:layout_marginTop="@dimen/margin_xsmall"
+            android:textAlignment="viewStart"
             android:gravity="start"/>
 
         <ProgressBar

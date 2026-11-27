@@ -82,7 +82,7 @@ object AppUpdater {
         fun retry() {
             currTaskHolder?.let {
                 scope.launch {
-                    it.taskControl.retry()
+                    it.taskControl.retry(scope)
                 }
             } ?: Log.w(TAG, "currTaskHolder is null")
         }
@@ -287,10 +287,10 @@ class AppUpdateTaskHolder(
             }
         }
 
-        suspend fun retry() {
+        suspend fun retry(scope: CoroutineScope) {
             locker.launchTaskOp() {
                 runCatching {
-                    currTask?.execute() ?: throw IllegalStateException("currTask is null")
+                    currTask?.runOn(scope) ?: throw IllegalStateException("currTask is null")
                 }.onFailure { Log.e(TAG, "重试任务失败: ${it.message}") }
             }
         }

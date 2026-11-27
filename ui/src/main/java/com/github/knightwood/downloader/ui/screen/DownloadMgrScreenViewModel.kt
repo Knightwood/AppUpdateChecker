@@ -48,7 +48,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 
 /**
@@ -676,11 +675,11 @@ data class NewTaskUiState(
          * 根据文件长度计算分块数量上限
          *
          * @param length 文件总字节数，未知时传 0
-         * @param minChunkSize 最小分块大小，单位字节
+         * @param oneChunkSize 一个分块大小，单位字节
          */
-        fun maxChunkCountOf(length: Long, minChunkSize: Long): Int {
+        fun maxChunkCountOf(length: Long, oneChunkSize: Long): Int {
             if (length <= 0L) return MIN_CHUNK_COUNT
-            val actualChunkCount = HttpConnectionUtils.solveChunkCount(length, minChunkSize)
+            val actualChunkCount = HttpConnectionUtils.solveChunkCount(length, oneChunkSize)
             return actualChunkCount.coerceIn(MIN_CHUNK_COUNT, MAX_CHUNK_COUNT)
         }
     }

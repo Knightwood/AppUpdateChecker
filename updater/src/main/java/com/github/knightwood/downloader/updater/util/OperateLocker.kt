@@ -1,11 +1,13 @@
 package com.github.knightwood.downloader.updater.util
 
 import android.os.SystemClock
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 
 class OperateLocker() {
+    private val TAG = "OperateLocker"
     /** 任务操作串行锁，同一时间只允许一个操作执行 */
     private val taskOpMutex = Mutex()
 
@@ -24,6 +26,7 @@ class OperateLocker() {
    suspend fun launchTaskOp(op: suspend () -> Unit) {
         if (!taskOpMutex.tryLock()) {
             // 已有操作在执行，丢弃本次请求
+            Log.d(TAG, "任务操作串行锁已锁定，丢弃本次请求")
             return
         }
         try {
@@ -33,6 +36,7 @@ class OperateLocker() {
             }
             lastTaskOpTime = SystemClock.elapsedRealtime()
             op()
+            Log.d(TAG, "任务操作完成")
         } finally {
             taskOpMutex.unlock()
         }

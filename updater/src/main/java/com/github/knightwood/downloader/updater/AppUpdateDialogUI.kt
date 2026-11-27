@@ -1,10 +1,17 @@
 package com.github.knightwood.downloader.updater
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -36,7 +43,10 @@ fun AppUpdateDialogUI(
     val state = stateProvider() ?: DownloadStatusType.IDLE
 
     AlertDialog(
-        properties = DialogProperties(dismissOnBackPress = !params.forceUpdate, dismissOnClickOutside = !params.forceUpdate),
+        properties = DialogProperties(
+            dismissOnBackPress = !params.forceUpdate,
+            dismissOnClickOutside = !params.forceUpdate
+        ),
         modifier = Modifier.fillMaxWidth(),
         onDismissRequest = onDismissRequest,
         icon = {
@@ -56,11 +66,18 @@ fun AppUpdateDialogUI(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("版本描述", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    params.description, modifier = Modifier
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 80.dp, max = 160.dp)
                         .padding(vertical = 8.dp)
                         .padding(start = 8.dp)
-                )
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        params.description+"\n"+params.description+"\n"+params.description
+                    )
+                }
                 if (state != DownloadStatusType.IDLE) {
                     val data = progressProvider()
                     val progress = data?.percentage ?: 0.0
@@ -88,11 +105,14 @@ fun AppUpdateDialogUI(
         },
         dismissButton = {
             if (!params.forceUpdate) {
-                TaskDismissButton(
-                    state = state,
-                    onDismissRequest = onDismissRequest,
-                    onCancelDownloadRequest = onCancelDownloadRequest
-                )
+                Row() {
+                    TaskDismissButton(
+                        state = state,
+                        onDismissRequest = onDismissRequest,
+                        onCancelDownloadRequest = onCancelDownloadRequest
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
             }
         },
     )
@@ -122,7 +142,7 @@ private fun TaskDismissButton(
 ) {
     when (state) {
         DownloadStatusType.ERROR, DownloadStatusType.IDLE, DownloadStatusType.STARTING, DownloadStatusType.CANCELED, DownloadStatusType.FINISHED -> {
-            TextButton(onClick = {
+            FixedTextButton(onClick = {
                 onDismissRequest()
             }) {
                 Text("关闭")
@@ -130,7 +150,7 @@ private fun TaskDismissButton(
         }
 
         DownloadStatusType.DOWNLOADING, DownloadStatusType.PAUSED -> {
-            TextButton(onClick = {
+            FixedTextButton(onClick = {
                 onCancelDownloadRequest()
             }) {
                 Text("取消")
@@ -138,7 +158,22 @@ private fun TaskDismissButton(
         }
 
     }
+}
 
+@Composable
+fun FixedTextButton(
+    modifier: Modifier = Modifier, onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    TextButton(modifier = modifier, onClick = onClick) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            content()
+        }
+    }
 }
 
 @Composable

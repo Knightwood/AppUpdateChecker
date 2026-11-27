@@ -18,6 +18,15 @@ import com.github.knightwood.downloader.core.model.DownloadTaskConf
 import com.github.knightwood.downloader.core.model.DownloadStatus
 import com.github.knightwood.downloader.core.model.DownloadTaskSaveState
 import com.github.knightwood.downloader.core.model.TaskQueueType
+import com.github.knightwood.downloader.core.model.isCancelledState
+import com.github.knightwood.downloader.core.model.isDownloadingState
+import com.github.knightwood.downloader.core.model.isFailedState
+import com.github.knightwood.downloader.core.model.isFinishedState
+import com.github.knightwood.downloader.core.model.isIdleState
+import com.github.knightwood.downloader.core.model.isPausedState
+import com.github.knightwood.downloader.core.model.isReadyState
+import com.github.knightwood.downloader.core.model.isRunningState
+import com.github.knightwood.downloader.core.model.isStartingState
 import com.github.knightwood.downloader.core.model.isTerminalState
 import com.github.knightwood.downloader.core.taskmgr.TaskScheduler
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -37,12 +46,15 @@ open class DownloadTask(
 ) {
     private val logger = LoggerFactory.getLogger("DownloadTask#$id")
     private val executor: IDownloadExecutor by lazy { executorProvider() }
+
     //任务状态的事件流
     private val _eventFlow: MutableSharedFlow<DownloadStatus> = MutableSharedFlow(0)
     val eventFlow: Flow<DownloadStatus> get() = _eventFlow
+
     // 任务状态流
     private val _stateFlow: MutableStateFlow<DownloadStatus> = MutableStateFlow(DownloadStatus.IDLE)
     val stateFlow: StateFlow<DownloadStatus> get() = _stateFlow
+
     //最新的下载进度
     private var _progressFlow: MutableStateFlow<DownloadProgressRecord?> = MutableStateFlow(null)
     val progressFlow: StateFlow<DownloadProgressRecord?> get() = _progressFlow
@@ -74,7 +86,7 @@ open class DownloadTask(
      * 调用此方法将挂起协程直到下载完成
      */
     suspend fun execute() {
-        if (isCancelled||isFailed) { //这是下载失败又重新下载的，需重置某些状态
+        if (isCancelled || isFailed) { //这是下载失败又重新下载的，需重置某些状态
             _stateFlow.value = DownloadStatus.IDLE
             //恢复之前取消任务时的下载进度
             if (_progressFlow.value != null) {
@@ -91,7 +103,7 @@ open class DownloadTask(
             if (state is DownloadStatus.DOWNLOADING) {
                 logger.debug("downloading progress {}", state)
                 _progressFlow.value = state.progress
-            } else if (state is DownloadStatus.ERROR){
+            } else if (state is DownloadStatus.ERROR) {
                 logger.error("download failed", state.e)
             }
         }
@@ -105,8 +117,10 @@ open class DownloadTask(
         if (isDownloading) {
             executor.pause()
             _stateFlow.first { status ->
+                logger.info("current status is $status, waiting for paused")
                 status is DownloadStatus.PAUSED
             }
+            logger.info("pause success")
         } else {
             logger.info("current status is $currentStatus , can not pause")
         }
@@ -117,11 +131,13 @@ open class DownloadTask(
      * 调用此方法后会立即挂起协程, 直到任务状态被更新到[DownloadStatus.DOWNLOADING]
      */
     suspend fun resume() {
-        if (isPaused) {
+        if (this.isPaused) {
             executor.resume()
             _stateFlow.first { status ->
+                logger.info("current status is $status, waiting for resumed")
                 status is DownloadStatus.DOWNLOADING
             }
+            logger.info("resume success")
         } else {
             logger.info("current status is $currentStatus , no need resume")
         }
@@ -132,12 +148,16 @@ open class DownloadTask(
      * 调用此方法后会立即挂起协程, 直到任务状态被更新到[DownloadStatus.CANCELED]
      */
     suspend fun cancel() {
-        if (currentStatus.isTerminalState) return
         // fixme: 任务处于STARTING状态时取消会有问题，暂不清楚什么原因
-        if (currentStatus is DownloadStatus.STARTING) return
-        executor.cancel()
-        _stateFlow.first { status ->
-            status is DownloadStatus.CANCELED
+        if (this.isRunning) {
+            executor.cancel()
+            _stateFlow.first { status ->
+                logger.info("current status is $status, waiting for canceled")
+                status is DownloadStatus.CANCELED
+            }
+            logger.info("cancel success")
+        } else {
+            logger.info("current status is $currentStatus , no need cancel")
         }
     }
 
@@ -147,11 +167,9 @@ open class DownloadTask(
      * @return 如果任务处于idle/starting状态，下载进度可能为null
      */
     suspend fun saveState(): DownloadTaskSaveState {
-        if (isDownloading) {
-            // 如果不停止任务直接获取进度和状态, 最终停止任务时实际下载进度与保存的进度不一致
-            // 所以保存进度时需要停止任务下载,并将最终状态指定为"下载中", 而不是停止任务下载达到的"取消"状态
-            cancel()
-        }
+        // 如果不停止任务直接获取进度和状态, 最终停止任务时实际下载进度与保存的进度不一致
+        // 所以保存进度时需要停止任务下载,并将最终状态指定为"下载中", 而不是停止任务下载达到的"取消"状态
+        cancel()
         return DownloadTaskSaveState(
             id = id, conf = conf,
             progress = _progressFlow.value,
@@ -197,13 +215,17 @@ open class DownloadTask(
 }
 
 val DownloadTask.currentStatus get() = stateFlow.value
-val DownloadTask.isIdle get() = stateFlow.value is DownloadStatus.IDLE
-val DownloadTask.isDownloading get() = stateFlow.value is DownloadStatus.DOWNLOADING
-val DownloadTask.isPaused get() = stateFlow.value is DownloadStatus.PAUSED
-val DownloadTask.isFailed get() = stateFlow.value is DownloadStatus.ERROR
-val DownloadTask.isCancelled get() = stateFlow.value is DownloadStatus.CANCELED
-val DownloadTask.isFinished get() = stateFlow.value is DownloadStatus.FINISHED
-val DownloadTask.isTerminal get() = stateFlow.value.isTerminalState
+val DownloadTask.isIdle get() = currentStatus.isIdleState
+val DownloadTask.isStarting get() = currentStatus.isStartingState
+val DownloadTask.isDownloading get() = currentStatus.isDownloadingState
+val DownloadTask.isPaused get() = currentStatus.isPausedState
+val DownloadTask.isFailed get() = currentStatus.isFailedState
+val DownloadTask.isCancelled get() = currentStatus.isCancelledState
+val DownloadTask.isFinished get() = currentStatus.isFinishedState
+
+val DownloadTask.isReady get() = currentStatus.isReadyState
+val DownloadTask.isRunning get() = currentStatus.isRunningState
+val DownloadTask.isTerminal get() = currentStatus.isTerminalState
 
 /**
  * 此方法根据任务当前状态映射成任务所处队列类型.

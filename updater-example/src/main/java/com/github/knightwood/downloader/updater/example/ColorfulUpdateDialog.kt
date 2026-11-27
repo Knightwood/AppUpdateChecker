@@ -67,8 +67,9 @@ open class ColorfulUpdateDialog(
 
         btnUpdate.setOnClickListener(this@ColorfulUpdateDialog)
         ibClose.setOnClickListener(this@ColorfulUpdateDialog)
-        tvTitle.text = "发现新版本!"
+        tvTitle.text = "发现新版本! ${params.versionName}"
         if (params.size != null) {
+            tvSize.visibility = View.VISIBLE
             tvSize.text = "更新大小：${DownloadFormat.formatByteSize(params.size)}"
         }
         tvDescription.text = params.description

@@ -99,6 +99,7 @@ open class MultiChunkDownloadExecutor(
                 var lastEmitTime = 0L
 
                 fun updateProgress(index: Int) {
+                    if (isPaused || isShutdown) return
                     val now = System.nanoTime()
                     if (now - lastEmitTime >= 200_000_000L) { // 200ms更新一次
                         lastEmitTime = now
@@ -166,26 +167,20 @@ open class MultiChunkDownloadExecutor(
                                     chunkDownloadedLengths.set(index, chunkDownloadedLengths.get(index) + delta)
                                     // 累加总下载量/读取的字节数
                                     totalDownloadedLength.addAndGet(delta.toLong())
-                                    if (isPaused) {
-                                        trySend(DownloadStatus.PAUSED)
-                                    } else {
-                                        updateProgressSignal.trySend(index)
-                                    }
+                                    updateProgress(index)
+                                },
+                                onStateChanged = { state ->
+                                    trySend(state)
                                 },
                             )
                         }
                     }
-                    val updateProgressJob = launch {
-                        while (!isShutdown) {
-                            val index = updateProgressSignal.receive()
-                            updateProgress(index)
-                            if (isPaused) {
-                                trySend(DownloadStatus.PAUSED)
-                            }
-                        }
-                    }
                     jobs.awaitAll()
-                    updateProgressJob.cancel(CancellationException("下载完成，取消更新进度"))
+                    if (!isShutdown) {
+                        trySend(DownloadStatus.FINISHED)
+                    } else {
+                        trySend(DownloadStatus.CANCELED)
+                    }
                     isTerminated = true
                     Unit
                 }
@@ -239,6 +234,7 @@ open class MultiChunkDownloadExecutor(
         downloadStartOffset: Long,
         downloadEndOffset: Long,
         onProgress: (Int) -> Unit,
+        onStateChanged: (DownloadStatus) -> Unit,
     ) {
         val con = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
@@ -270,7 +266,10 @@ open class MultiChunkDownloadExecutor(
                     storage.writeAt(pos, buffer, 0, read)
                     pos += read
                     onProgress(read)
-                    if (isPaused) pauseSignal.first { !it }
+                    if (isPaused) {
+                        onStateChanged(DownloadStatus.PAUSED)
+                        pauseSignal.first { !it }
+                    }
                     if (isShutdown) break
                 }
                 // 校验: 本块是否下完

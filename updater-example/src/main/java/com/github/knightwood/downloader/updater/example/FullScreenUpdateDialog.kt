@@ -105,6 +105,7 @@ open class FullScreenUpdateDialog(
         val btnCancel = findViewById<Button>(R.id.app_update_ib_close)
         val ivBg = findViewById<ImageView>(R.id.app_update_iv_bg)
         val tvTitle = findViewById<TextView>(R.id.app_update_tv_title)
+        val tvVersion = findViewById<TextView>(R.id.app_update_tv_version)
         val tvSize = findViewById<TextView>(R.id.app_update_tv_size)
         val tvDescription = findViewById<TextView>(R.id.app_update_tv_description)
         val progressBar = findViewById<ProgressBar>(R.id.app_update_progress_bar)
@@ -113,6 +114,7 @@ open class FullScreenUpdateDialog(
         btnUpdate.setOnClickListener(this@FullScreenUpdateDialog)
         btnCancel.setOnClickListener(this@FullScreenUpdateDialog)
         tvTitle.text = "发现新版本!"
+        tvVersion.text = "版本：${params.versionName}"
         if (params.size != null) {
             tvSize.text = "更新大小：${DownloadFormat.formatByteSize(params.size)}"
         }

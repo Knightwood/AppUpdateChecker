@@ -36,7 +36,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -102,7 +101,7 @@ fun DownloadMgrScreen(viewModel: DownloadMgrScreenViewModel) {
             TopAppBar(
                 title = { Text("下载管理器") },
                 actions = {
-                    TextButton(
+                    FixedTextButton(
                         onClick = viewModel::clearFinished,
                         enabled = tasks.any { it.state == DownloadStatusType.FINISHED },
                     ) {
@@ -279,32 +278,32 @@ private fun TaskActionRow(
     ) {
         when (task.state) {
             DownloadStatusType.STARTING, DownloadStatusType.DOWNLOADING -> {
-                TextButton(onClick = { viewModel.pause(task.taskId) }) { Text("暂停") }
-                TextButton(onClick = { viewModel.cancel(task.taskId) }) { Text("停止") }
+                FixedTextButton(onClick = { viewModel.pause(task.taskId) }) { Text("暂停") }
+                FixedTextButton(onClick = { viewModel.cancel(task.taskId) }) { Text("停止") }
             }
 
             DownloadStatusType.PAUSED -> {
-                TextButton(onClick = { viewModel.resume(task.taskId) }) { Text("继续") }
-                TextButton(onClick = { viewModel.cancel(task.taskId) }) { Text("停止") }
+                FixedTextButton(onClick = { viewModel.resume(task.taskId) }) { Text("继续") }
+                FixedTextButton(onClick = { viewModel.cancel(task.taskId) }) { Text("停止") }
             }
 
             DownloadStatusType.IDLE -> {
-                TextButton(onClick = { viewModel.cancel(task.taskId) }) { Text("停止") }
+                FixedTextButton(onClick = { viewModel.cancel(task.taskId) }) { Text("停止") }
             }
 
             DownloadStatusType.CANCELED -> {
-                TextButton(onClick = { viewModel.retry(task.taskId) }) { Text("恢复") }
+                FixedTextButton(onClick = { viewModel.retry(task.taskId) }) { Text("恢复") }
             }
 
             DownloadStatusType.ERROR -> {
-                TextButton(onClick = { viewModel.retry(task.taskId) }) { Text("重试") }
+                FixedTextButton(onClick = { viewModel.retry(task.taskId) }) { Text("重试") }
             }
 
             DownloadStatusType.FINISHED -> {
                 // 不处理
             }
         }
-        TextButton(onClick = { viewModel.delete(task.taskId) }) { Text("删除") }
+        FixedTextButton(onClick = { viewModel.delete(task.taskId) }) { Text("删除") }
     }
 }
 
@@ -439,13 +438,13 @@ private fun DownloadTaskItem.summaryText(): String = buildString {
             append("%)")
         }
     }
+    if (chunked) {
+        append("\n")
+        append("$chunkCount 分块")
+    }
     if (state == DownloadStatusType.DOWNLOADING) {
         append(" · ")
         append(DownloadFormat.formatSpeed(speed))
-    }
-    if (chunked) {
-        append(" · ")
-        append("$chunkCount 分块")
     }
 //    append(" · ")
 //    append(targetText)

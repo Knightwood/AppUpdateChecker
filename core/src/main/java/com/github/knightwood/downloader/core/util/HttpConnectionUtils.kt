@@ -95,16 +95,16 @@ object HttpConnectionUtils {
      * 比如数据长度17，最小分块大小为3，那么分块数量为6，即[0,2],[3,5],[6,8],[9,11],[12,14],[15,16]
      *
      * @param totalLength 文件总长度
-     * @param minChunkSize 最小分块大小
+     * @param oneChunkSize 分块大小
      * @return 分块数量
      */
     fun solveChunkCount(
         totalLength: Long,
-        minChunkSize: Long,
+        oneChunkSize: Long,
     ): Int {
         // totalLength可能无法正好被minChunkSize整除，需要计算余数，如果余数大于0，则分块数量加1
-        val mod = totalLength % minChunkSize
-        val actualChunkCount = if (mod > 0) totalLength / minChunkSize + 1 else totalLength / minChunkSize
+        val mod = totalLength % oneChunkSize
+        val actualChunkCount = if (mod > 0) totalLength / oneChunkSize + 1 else totalLength / oneChunkSize
         return actualChunkCount.toInt()
     }
 }

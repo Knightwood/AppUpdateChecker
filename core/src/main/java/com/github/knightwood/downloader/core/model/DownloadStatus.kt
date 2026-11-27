@@ -46,6 +46,16 @@ val DownloadStatus.isTerminalState: Boolean
     get() = this is DownloadStatus.FINISHED ||
             this is DownloadStatus.CANCELED ||
             this is DownloadStatus.ERROR
+val DownloadStatus.isIdleState get() = this is DownloadStatus.IDLE
+val DownloadStatus.isStartingState get() = this is DownloadStatus.STARTING
+val DownloadStatus.isReadyState get() = isIdleState || isStartingState
+val DownloadStatus.isDownloadingState get() = this is DownloadStatus.DOWNLOADING
+val DownloadStatus.isPausedState get() = this is DownloadStatus.PAUSED
+val DownloadStatus.isFailedState get() = this is DownloadStatus.ERROR
+val DownloadStatus.isCancelledState get() = this is DownloadStatus.CANCELED
+val DownloadStatus.isFinishedState get() = this is DownloadStatus.FINISHED
+val DownloadStatus.isRunningState get() = isDownloadingState || isPausedState
+
 
 /**
  * @param index 分块id
